@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom styles */
+body {
+  @apply font-sans antialiased;
+}
+
+.container {
+  @apply mx-auto px-4 sm:px-6 lg:px-8;
+}
+
+/* Responsive typography */
+h1 {
+  @apply text-3xl md:text-4xl font-bold;
+}
+
+h2 {
+  @apply text-2xl md:text-3xl font-semibold;
+}
+
+/* Button variants */
+.btn {
+  @apply px-4 py-2 rounded-lg font-medium transition-colors duration-200;
+}
+
+.btn-primary {
+  @apply btn bg-primary text-white hover:bg-blue-600;
+}
+
+.btn-secondary {
+  @apply btn bg-secondary text-white hover:bg-purple-600;
+}
+
+.btn-outline {
+  @apply btn border border-gray-300 text-gray-700 hover:bg-gray-50;
+}
+
+/* Card component */
+.card {
+  @apply bg-white rounded-lg shadow-md p-4 md:p-6;
+}
+
+/* Responsive grid */
+.grid-responsive {
+  @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6;
+}
