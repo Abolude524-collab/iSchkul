@@ -4,37 +4,93 @@ import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { useAuthStore } from '../services/store';
 import { gamificationAPI } from '../services/api';
-import { Loader, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
+import { Loader, AlertCircle, CheckCircle, XCircle, Brain, Calculator, Plus, BookOpen, Trophy, Clock, Edit, Trash2, Play } from 'lucide-react';
 
 interface Question {
-  id: string;
-  text: string;
+  _id?: string;
+  id?: string;
+  question: string;
+  text?: string;
   options: string[];
   correctAnswer: number;
   explanation?: string;
+  imageUrl?: string;
 }
 
 interface Quiz {
   _id: string;
   title: string;
-  description: string;
+  subject: string;
+  description?: string;
   difficulty: string;
-  topics: string[];
   questions: Question[];
+  timeLimit?: number;
+  isPublic?: boolean;
+  createdBy?: {
+    _id: string;
+    name: string;
+    username: string;
+  };
+  createdAt?: string;
+  totalAttempts?: number;
+  averageScore?: number;
 }
+
+interface QuizResult {
+  score: number;
+  totalQuestions: number;
+  percentage: number;
+  timeSpent: number;
+  detailedResults: any[];
+  passed: boolean;
+}
+
+type QuizView = 'dashboard' | 'create' | 'custom-create' | 'edit' | 'generated' | 'taking' | 'results';
 
 export const QuizPage: React.FC = () => {
   const { user } = useAuthStore();
   const navigate = useNavigate();
-  const [quiz, setQuiz] = useState<Quiz | null>(null);
+
+  // Main state
+  const [view, setView] = useState<QuizView>('dashboard');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [view, setView] = useState<'create' | 'taking'>('create');
+
+  // Quiz data
+  const [quizzes, setQuizzes] = useState<Quiz[]>([]);
+  const [selectedQuiz, setSelectedQuiz] = useState<Quiz | null>(null);
+  const [quiz, setQuiz] = useState<Quiz | null>(null); // For AI-generated quizzes
+  const [quizResult, setQuizResult] = useState<QuizResult | null>(null);
+
+  // Quiz creation/editing
+  const [createForm, setCreateForm] = useState({
+    title: '',
+    subject: '',
+    description: '',
+    difficulty: 'medium',
+    timeLimit: 30, // minutes
+    isPublic: true,
+  });
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+
+  // Quiz taking
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<number[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
   const [attemptNumber, setAttemptNumber] = useState(1);
+  const [timeRemaining, setTimeRemaining] = useState(0);
+  const [startTime, setStartTime] = useState<Date | null>(null);
+
+  // Calculator
+  const [showCalculator, setShowCalculator] = useState(false);
+  const [calcDisplay, setCalcDisplay] = useState('0');
+  const [calcPreviousValue, setCalcPreviousValue] = useState<number | null>(null);
+  const [calcOperation, setCalcOperation] = useState<string | null>(null);
+  const [calcWaitingForOperand, setCalcWaitingForOperand] = useState(false);
+
+  // Legacy AI generation (keeping for backward compatibility)
   const [formData, setFormData] = useState({
     topic: '',
     subject: '',
@@ -49,8 +105,39 @@ export const QuizPage: React.FC = () => {
     }
   }, [user, navigate]);
 
+  // Timer effect
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (view === 'taking' && timeRemaining > 0) {
+      interval = setInterval(() => {
+        setTimeRemaining(prev => {
+          if (prev <= 1) {
+            // Auto-submit when time runs out
+            handleAutoSubmit();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [view, timeRemaining]);
+
+  // Start timer when quiz begins
+  const startQuiz = () => {
+    const estimatedMinutes = Math.ceil(quiz!.questions.length * 1.5);
+    setTimeRemaining(estimatedMinutes * 60); // Convert to seconds
+    setShowCalculator(false); // Hide calculator initially
+    setCalcDisplay('0'); // Reset calculator
+    setCalcPreviousValue(null);
+    setCalcOperation(null);
+    setCalcWaitingForOperand(false);
+    setView('taking');
+  };
+
   const generateQuiz = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return; // Prevent multiple submissions
     if (!formData.topic.trim() && !uploadedFile) {
       setError('Please provide a topic or upload a file');
       return;
@@ -75,7 +162,7 @@ export const QuizPage: React.FC = () => {
           };
 
           response = await fetch(
-            `${process.env.REACT_APP_API_URL || 'http://localhost:7071'}/api/generate/quiz`,
+            `${import.meta.env.VITE_API_URL}/generate/quiz`,
             {
               method: 'POST',
               headers: {
@@ -95,7 +182,7 @@ export const QuizPage: React.FC = () => {
           if (!response.ok) throw new Error('Failed to generate quiz');
           const data = await response.json();
           setQuiz(data.quiz);
-          setView('taking');
+          setView('generated');
           setAnswers(new Array(data.quiz.questions.length).fill(-1));
           setUploadedFile(null);
         };
@@ -104,7 +191,7 @@ export const QuizPage: React.FC = () => {
       } else {
         // Send text only
         response = await fetch(
-          `${process.env.REACT_APP_API_URL || 'http://localhost:7071'}/api/generate/quiz`,
+          `${import.meta.env.VITE_API_URL}/generate/quiz`,
           {
             method: 'POST',
             headers: {
@@ -124,7 +211,7 @@ export const QuizPage: React.FC = () => {
       if (!response.ok) throw new Error('Failed to generate quiz');
       const data = await response.json();
       setQuiz(data.quiz);
-      setView('taking');
+      setView('generated');
       setAnswers(new Array(data.quiz.questions.length).fill(-1));
     } catch (err: any) {
       setError(err.message);
@@ -162,7 +249,7 @@ export const QuizPage: React.FC = () => {
     try {
       const token = localStorage.getItem('authToken');
       const submitResponse = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:7071'}/api/quiz/${quiz._id}/submit`,
+        `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/quiz/${quiz._id}/submit`,
         {
           method: 'POST',
           headers: {
@@ -197,12 +284,364 @@ export const QuizPage: React.FC = () => {
     }
   };
 
+  const handleAutoSubmit = async () => {
+    if (!quiz) return;
+
+    let correctCount = 0;
+    answers.forEach((answer, index) => {
+      if (answer === quiz.questions[index].correctAnswer) {
+        correctCount++;
+      }
+    });
+
+    const percentage = (correctCount / quiz.questions.length) * 100;
+    setScore(percentage);
+    setSubmitted(true);
+
+    // Save quiz result
+    try {
+      const token = localStorage.getItem('authToken');
+      const submitResponse = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/quiz/${quiz._id}/submit`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            answers,
+            score: percentage,
+            timeSpent: 0,
+          }),
+        }
+      );
+
+      if (submitResponse.ok) {
+        const submitData = await submitResponse.json();
+        setAttemptNumber(submitData.attemptNumber || 1);
+
+        // Award XP for quiz completion
+        try {
+          await gamificationAPI.awardXP({
+            activityType: 'QUIZ_COMPLETE',
+            xpAmount: 10,
+            description: `Completed quiz: ${quiz.title} (${Math.round(percentage)}% score)`
+          });
+        } catch (xpError) {
+          console.error('Failed to award XP:', xpError);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to submit quiz:', error);
+    }
+  };
+
+  // Calculator functions
+  const calcInputNumber = (num: string) => {
+    if (calcWaitingForOperand) {
+      setCalcDisplay(num);
+      setCalcWaitingForOperand(false);
+    } else {
+      setCalcDisplay(calcDisplay === '0' ? num : calcDisplay + num);
+    }
+  };
+
+  const calcInputOperation = (nextOperation: string) => {
+    const inputValue = parseFloat(calcDisplay);
+
+    if (calcPreviousValue === null) {
+      setCalcPreviousValue(inputValue);
+    } else if (calcOperation) {
+      const currentValue = calcPreviousValue || 0;
+      const newValue = calcCalculate(currentValue, inputValue, calcOperation);
+
+      setCalcDisplay(`${parseFloat(newValue.toFixed(7))}`);
+      setCalcPreviousValue(newValue);
+    }
+
+    setCalcWaitingForOperand(true);
+    setCalcOperation(nextOperation);
+  };
+
+  const calcCalculate = (firstValue: number, secondValue: number, operation: string) => {
+    switch (operation) {
+      case '+':
+        return firstValue + secondValue;
+      case '-':
+        return firstValue - secondValue;
+      case '*':
+        return firstValue * secondValue;
+      case '/':
+        return firstValue / secondValue;
+      case '=':
+        return secondValue;
+      default:
+        return secondValue;
+    }
+  };
+
+  const calcPerformCalculation = () => {
+    const inputValue = parseFloat(calcDisplay);
+
+    if (calcPreviousValue !== null && calcOperation) {
+      const newValue = calcCalculate(calcPreviousValue, inputValue, calcOperation);
+      setCalcDisplay(`${parseFloat(newValue.toFixed(7))}`);
+      setCalcPreviousValue(null);
+      setCalcOperation(null);
+      setCalcWaitingForOperand(true);
+    }
+  };
+
+  const calcClear = () => {
+    setCalcDisplay('0');
+    setCalcPreviousValue(null);
+    setCalcOperation(null);
+    setCalcWaitingForOperand(false);
+  };
+
+  const calcInputDecimal = () => {
+    if (calcWaitingForOperand) {
+      setCalcDisplay('0.');
+      setCalcWaitingForOperand(false);
+    } else if (calcDisplay.indexOf('.') === -1) {
+      setCalcDisplay(calcDisplay + '.');
+    }
+  };
+
+  // Quiz Management Functions
+  const fetchQuizzes = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/quizzes`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setQuizzes(data.quizzes);
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const createQuiz = async () => {
+    if (!createForm.title.trim() || !questions.length) {
+      setError('Title and at least one question are required');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/quizzes/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          ...createForm,
+          timeLimit: createForm.timeLimit * 60, // Convert to seconds
+          questions,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setQuizzes([data.quiz, ...quizzes]);
+        setView('dashboard');
+        resetCreateForm();
+      } else {
+        const err = await response.json();
+        setError(err.error || 'Failed to create quiz');
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const startQuizTaking = (quiz: Quiz) => {
+    setSelectedQuiz(quiz);
+    setAnswers(new Array(quiz.questions.length).fill(-1));
+    setCurrentQuestion(0);
+    setSubmitted(false);
+    setScore(0);
+    setTimeRemaining(quiz.timeLimit || 1800);
+    setStartTime(new Date());
+    setShowCalculator(false);
+    setCalcDisplay('0');
+    setCalcPreviousValue(null);
+    setCalcOperation(null);
+    setCalcWaitingForOperand(false);
+    setView('taking');
+  };
+
+  const submitQuiz = async () => {
+    if (!selectedQuiz) return;
+
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      const timeSpent = startTime ? Math.floor((new Date().getTime() - startTime.getTime()) / 1000) : 0;
+
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/quizzes/${selectedQuiz._id}/submit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          answers,
+          timeSpent,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setQuizResult(data.result);
+        setSubmitted(true);
+        setView('results');
+      } else {
+        const err = await response.json();
+        setError(err.error || 'Failed to submit quiz');
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteQuiz = async (quizId: string) => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/quizzes/${quizId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.ok) {
+        setQuizzes(quizzes.filter(quiz => quiz._id !== quizId));
+      } else {
+        const err = await response.json();
+        setError(err.error || 'Failed to delete quiz');
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addQuestion = () => {
+    const newQuestion: Question = {
+      question: '',
+      options: ['', '', '', ''],
+      correctAnswer: 0,
+      explanation: '',
+    };
+    setQuestions([...questions, newQuestion]);
+    setCurrentQuestionIndex(questions.length);
+  };
+
+  const updateQuestion = (index: number, field: keyof Question, value: any) => {
+    const updatedQuestions = [...questions];
+    updatedQuestions[index] = { ...updatedQuestions[index], [field]: value };
+    setQuestions(updatedQuestions);
+  };
+
+  const removeQuestion = (index: number) => {
+    setQuestions(questions.filter((_, i) => i !== index));
+    if (currentQuestionIndex >= index && currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(currentQuestionIndex - 1);
+    }
+  };
+
+  const resetCreateForm = () => {
+    setCreateForm({
+      title: '',
+      subject: '',
+      description: '',
+      difficulty: 'medium',
+      timeLimit: 30,
+      isPublic: true,
+    });
+    setQuestions([]);
+    setCurrentQuestionIndex(0);
+  };
+
+  const updateQuiz = async () => {
+    if (!selectedQuiz || !createForm.title.trim() || !questions.length) {
+      setError('Title and at least one question are required');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/quizzes/${selectedQuiz._id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          ...createForm,
+          timeLimit: createForm.timeLimit * 60, // Convert to seconds
+          questions,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setQuizzes(quizzes.map(quiz => quiz._id === selectedQuiz._id ? data.quiz : quiz));
+        setSelectedQuiz(null);
+        setView('dashboard');
+        resetCreateForm();
+      } else {
+        const err = await response.json();
+        setError(err.error || 'Failed to update quiz');
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (view === 'dashboard') {
+      fetchQuizzes();
+    }
+  }, [view]);
+
+  useEffect(() => {
+    if (view === 'edit' && selectedQuiz) {
+      setCreateForm({
+        title: selectedQuiz.title,
+        subject: selectedQuiz.subject,
+        description: selectedQuiz.description || '',
+        difficulty: selectedQuiz.difficulty,
+        timeLimit: selectedQuiz.timeLimit ? Math.floor(selectedQuiz.timeLimit / 60) : 30,
+        isPublic: selectedQuiz.isPublic ?? true,
+      });
+      setQuestions(selectedQuiz.questions);
+    }
+  }, [view, selectedQuiz]);
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Navbar />
 
       <div className="flex-grow max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-12">
-        <h1 className="text-4xl font-bold text-gray-900 mb-8">AI Quiz Generator</h1>
+        <h1 className="text-4xl font-bold text-gray-900 mb-8">Quiz Center</h1>
 
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex gap-3">
@@ -211,7 +650,597 @@ export const QuizPage: React.FC = () => {
           </div>
         )}
 
-        {view === 'create' ? (
+        {view === 'dashboard' ? (
+          <div className="space-y-8">
+            <div className="flex justify-between items-center">
+              <h1 className="text-4xl font-bold text-gray-900">Quiz Dashboard</h1>
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setView('create')}
+                  className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg transition-all flex items-center gap-2"
+                >
+                  <Brain size={20} />
+                  AI Generate Quiz
+                </button>
+                <button
+                  onClick={() => setView('custom-create')}
+                  className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-lg hover:shadow-lg transition-all flex items-center gap-2"
+                >
+                  <Plus size={20} />
+                  Create Custom Quiz
+                </button>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="flex justify-center items-center py-12">
+                <Loader size={32} className="animate-spin text-blue-600" />
+              </div>
+            ) : quizzes.length === 0 ? (
+              <div className="text-center py-12">
+                <BookOpen size={64} className="text-gray-400 mx-auto mb-4" />
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">No quizzes yet</h3>
+                <p className="text-gray-600 mb-6">Create your first quiz to get started!</p>
+                <div className="flex gap-4 justify-center">
+                  <button
+                    onClick={() => setView('create')}
+                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg transition-all flex items-center gap-2"
+                  >
+                    <Brain size={20} />
+                    AI Generate Quiz
+                  </button>
+                  <button
+                    onClick={() => setView('custom-create')}
+                    className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-lg hover:shadow-lg transition-all flex items-center gap-2"
+                  >
+                    <Plus size={20} />
+                    Create Custom Quiz
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {quizzes.map((quiz) => (
+                  <div key={quiz._id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="flex-1">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-1">{quiz.title}</h3>
+                        <p className="text-sm text-gray-600">{quiz.subject}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => startQuizTaking(quiz)}
+                          className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                          title="Take Quiz"
+                        >
+                          <Play size={16} />
+                        </button>
+                        {quiz.createdBy?._id === user?.id && (
+                          <>
+                            <button
+                              onClick={() => {
+                                setSelectedQuiz(quiz);
+                                setView('edit');
+                              }}
+                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Edit Quiz"
+                            >
+                              <Edit size={16} />
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (confirm('Are you sure you want to delete this quiz? This action cannot be undone.')) {
+                                  deleteQuiz(quiz._id);
+                                }
+                              }}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Delete Quiz"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 mb-4">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Questions:</span>
+                        <span className="font-medium">{quiz.questions.length}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Difficulty:</span>
+                        <span className="font-medium capitalize">{quiz.difficulty}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Time Limit:</span>
+                        <span className="font-medium">{quiz.timeLimit ? `${Math.floor(quiz.timeLimit / 60)} min` : 'No limit'}</span>
+                      </div>
+                      {quiz.averageScore !== undefined && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Avg Score:</span>
+                          <span className="font-medium">{quiz.averageScore.toFixed(1)}%</span>
+                        </div>
+                      )}
+                      {quiz.totalAttempts !== undefined && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Attempts:</span>
+                          <span className="font-medium">{quiz.totalAttempts}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => startQuizTaking(quiz)}
+                        className="flex-1 px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-lg hover:shadow-lg transition-all text-sm flex items-center justify-center gap-2"
+                      >
+                        <Play size={16} />
+                        Take Quiz
+                      </button>
+                    </div>
+
+                    {quiz.createdBy && (
+                      <div className="mt-4 pt-4 border-t border-gray-200">
+                        <p className="text-xs text-gray-500">
+                          Created by {quiz.createdBy.name} • {new Date(quiz.createdAt || '').toLocaleDateString()}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : view === 'custom-create' ? (
+          <div className="max-w-4xl">
+            <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">Create Custom Quiz</h2>
+                <button
+                  onClick={() => setView('dashboard')}
+                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  Back to Dashboard
+                </button>
+              </div>
+
+              {/* Quiz Settings */}
+              <div className="mb-8 p-6 bg-gray-50 rounded-lg">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Quiz Settings</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-2">
+                      Quiz Title *
+                    </label>
+                    <input
+                      type="text"
+                      value={createForm.title}
+                      onChange={(e) => setCreateForm({ ...createForm, title: e.target.value })}
+                      placeholder="Enter quiz title"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-2">
+                      Subject *
+                    </label>
+                    <input
+                      type="text"
+                      value={createForm.subject}
+                      onChange={(e) => setCreateForm({ ...createForm, subject: e.target.value })}
+                      placeholder="e.g., Mathematics, History"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-2">
+                      Difficulty
+                    </label>
+                    <select
+                      value={createForm.difficulty}
+                      onChange={(e) => setCreateForm({ ...createForm, difficulty: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                    >
+                      <option value="easy">Easy</option>
+                      <option value="medium">Medium</option>
+                      <option value="hard">Hard</option>
+                      <option value="veryhard">Very Hard</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-2">
+                      Time Limit (minutes)
+                    </label>
+                    <input
+                      type="number"
+                      value={createForm.timeLimit}
+                      onChange={(e) => setCreateForm({ ...createForm, timeLimit: parseInt(e.target.value) || 30 })}
+                      min="1"
+                      max="180"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-900 mb-2">
+                      Description (Optional)
+                    </label>
+                    <textarea
+                      value={createForm.description}
+                      onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
+                      placeholder="Brief description of the quiz"
+                      rows={3}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                    />
+                  </div>
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="isPublic"
+                      checked={createForm.isPublic}
+                      onChange={(e) => setCreateForm({ ...createForm, isPublic: e.target.checked })}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="isPublic" className="ml-2 block text-sm text-gray-900">
+                      Make quiz public (visible to other users)
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Questions */}
+              <div className="mb-8">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Questions ({questions.length})</h3>
+                  <button
+                    onClick={addQuestion}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                  >
+                    <Plus size={16} />
+                    Add Question
+                  </button>
+                </div>
+
+                {questions.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    No questions added yet. Click "Add Question" to get started.
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {questions.map((question, index) => (
+                      <div key={index} className="border border-gray-200 rounded-lg p-4">
+                        <div className="flex justify-between items-start mb-4">
+                          <h4 className="font-medium text-gray-900">Question {index + 1}</h4>
+                          <button
+                            onClick={() => removeQuestion(index)}
+                            className="text-red-600 hover:text-red-700 p-1"
+                            title="Remove question"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-900 mb-2">
+                              Question Text *
+                            </label>
+                            <textarea
+                              value={question.question}
+                              onChange={(e) => updateQuestion(index, 'question', e.target.value)}
+                              placeholder="Enter your question"
+                              rows={2}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                              required
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-900 mb-2">
+                              Options *
+                            </label>
+                            <div className="space-y-2">
+                              {question.options.map((option, optIndex) => (
+                                <div key={optIndex} className="flex items-center gap-2">
+                                  <input
+                                    type="radio"
+                                    name={`correct-${index}`}
+                                    checked={question.correctAnswer === optIndex}
+                                    onChange={() => updateQuestion(index, 'correctAnswer', optIndex)}
+                                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={option}
+                                    onChange={(e) => {
+                                      const newOptions = [...question.options];
+                                      newOptions[optIndex] = e.target.value;
+                                      updateQuestion(index, 'options', newOptions);
+                                    }}
+                                    placeholder={`Option ${optIndex + 1}`}
+                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-900 mb-2">
+                              Explanation (Optional)
+                            </label>
+                            <textarea
+                              value={question.explanation || ''}
+                              onChange={(e) => updateQuestion(index, 'explanation', e.target.value)}
+                              placeholder="Explain why this is the correct answer"
+                              rows={2}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-4">
+                <button
+                  onClick={createQuiz}
+                  disabled={loading || !createForm.title.trim() || !createForm.subject.trim() || questions.length === 0}
+                  className="flex-1 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-lg hover:shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <Loader size={20} className="animate-spin" />
+                      Creating Quiz...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle size={20} />
+                      Create Quiz
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={() => {
+                    resetCreateForm();
+                    setView('dashboard');
+                  }}
+                  className="px-6 py-3 border border-gray-300 text-gray-900 font-semibold rounded-lg hover:bg-gray-50 transition-all"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : view === 'edit' && selectedQuiz ? (
+          <div className="max-w-4xl">
+            <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">Edit Quiz</h2>
+                <button
+                  onClick={() => {
+                    setSelectedQuiz(null);
+                    setView('dashboard');
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  Back to Dashboard
+                </button>
+              </div>
+
+              {/* Quiz Settings */}
+              <div className="mb-8 p-6 bg-gray-50 rounded-lg">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Quiz Settings</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-2">
+                      Quiz Title *
+                    </label>
+                    <input
+                      type="text"
+                      value={createForm.title || selectedQuiz.title}
+                      onChange={(e) => setCreateForm({ ...createForm, title: e.target.value })}
+                      placeholder="Enter quiz title"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-2">
+                      Subject *
+                    </label>
+                    <input
+                      type="text"
+                      value={createForm.subject || selectedQuiz.subject}
+                      onChange={(e) => setCreateForm({ ...createForm, subject: e.target.value })}
+                      placeholder="e.g., Mathematics, History"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-2">
+                      Difficulty
+                    </label>
+                    <select
+                      value={createForm.difficulty || selectedQuiz.difficulty}
+                      onChange={(e) => setCreateForm({ ...createForm, difficulty: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                    >
+                      <option value="easy">Easy</option>
+                      <option value="medium">Medium</option>
+                      <option value="hard">Hard</option>
+                      <option value="veryhard">Very Hard</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-2">
+                      Time Limit (minutes)
+                    </label>
+                    <input
+                      type="number"
+                      value={createForm.timeLimit || (selectedQuiz.timeLimit ? Math.floor(selectedQuiz.timeLimit / 60) : 30)}
+                      onChange={(e) => setCreateForm({ ...createForm, timeLimit: parseInt(e.target.value) || 30 })}
+                      min="1"
+                      max="180"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-900 mb-2">
+                      Description (Optional)
+                    </label>
+                    <textarea
+                      value={createForm.description || selectedQuiz.description || ''}
+                      onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
+                      placeholder="Brief description of the quiz"
+                      rows={3}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                    />
+                  </div>
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="isPublic"
+                      checked={createForm.isPublic ?? selectedQuiz.isPublic ?? true}
+                      onChange={(e) => setCreateForm({ ...createForm, isPublic: e.target.checked })}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="isPublic" className="ml-2 block text-sm text-gray-900">
+                      Make quiz public (visible to other users)
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Questions */}
+              <div className="mb-8">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Questions ({questions.length || selectedQuiz.questions.length})</h3>
+                  <button
+                    onClick={addQuestion}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                  >
+                    <Plus size={16} />
+                    Add Question
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {(questions.length > 0 ? questions : selectedQuiz.questions).map((question, index) => (
+                    <div key={index} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex justify-between items-start mb-4">
+                        <h4 className="font-medium text-gray-900">Question {index + 1}</h4>
+                        <button
+                          onClick={() => removeQuestion(index)}
+                          className="text-red-600 hover:text-red-700 p-1"
+                          title="Remove question"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-900 mb-2">
+                            Question Text *
+                          </label>
+                          <textarea
+                            value={question.question}
+                            onChange={(e) => updateQuestion(index, 'question', e.target.value)}
+                            placeholder="Enter your question"
+                            rows={2}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-900 mb-2">
+                            Options *
+                          </label>
+                          <div className="space-y-2">
+                            {question.options.map((option, optIndex) => (
+                              <div key={optIndex} className="flex items-center gap-2">
+                                <input
+                                  type="radio"
+                                  name={`correct-${index}`}
+                                  checked={question.correctAnswer === optIndex}
+                                  onChange={() => updateQuestion(index, 'correctAnswer', optIndex)}
+                                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                                />
+                                <input
+                                  type="text"
+                                  value={option}
+                                  onChange={(e) => {
+                                    const newOptions = [...question.options];
+                                    newOptions[optIndex] = e.target.value;
+                                    updateQuestion(index, 'options', newOptions);
+                                  }}
+                                  placeholder={`Option ${optIndex + 1}`}
+                                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-900 mb-2">
+                            Explanation (Optional)
+                          </label>
+                          <textarea
+                            value={question.explanation || ''}
+                            onChange={(e) => updateQuestion(index, 'explanation', e.target.value)}
+                            placeholder="Explain why this is the correct answer"
+                            rows={2}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-4">
+                <button
+                  onClick={updateQuiz}
+                  disabled={loading}
+                  className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold rounded-lg hover:shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <Loader size={20} className="animate-spin" />
+                      Updating Quiz...
+                    </>
+                  ) : (
+                    <>
+                      <Edit size={20} />
+                      Update Quiz
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedQuiz(null);
+                    setView('dashboard');
+                    resetCreateForm();
+                  }}
+                  className="px-6 py-3 border border-gray-300 text-gray-900 font-semibold rounded-lg hover:bg-gray-50 transition-all"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : view === 'create' ? (
           <div className="max-w-2xl">
             <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200">
               <h2 className="text-2xl font-bold text-gray-900 mb-6">Create a Quiz</h2>
@@ -340,6 +1369,77 @@ export const QuizPage: React.FC = () => {
               </ul>
             </div>
           </div>
+        ) : view === 'generated' ? (
+          <div className="max-w-2xl mx-auto">
+            <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200">
+              <div className="text-center mb-8">
+                <CheckCircle size={64} className="text-green-500 mx-auto mb-4" />
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">Quiz Generated Successfully!</h2>
+                <p className="text-gray-600">Your AI-generated quiz is ready. Review the details below and click "Start Test" when you're ready.</p>
+              </div>
+
+              {quiz && (
+                <div className="space-y-6">
+                  <div className="bg-gray-50 rounded-lg p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">{quiz.title}</h3>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="font-medium text-gray-700">Questions:</span>
+                        <span className="ml-2 text-gray-900">{quiz.questions.length}</span>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-700">Difficulty:</span>
+                        <span className="ml-2 text-gray-900 capitalize">{quiz.difficulty}</span>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-700">Topics:</span>
+                        <span className="ml-2 text-gray-900">{quiz.topics.join(', ') || 'General'}</span>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-700">Estimated Time:</span>
+                        <span className="ml-2 text-gray-900">{Math.ceil(quiz.questions.length * 1.5)} minutes</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <h4 className="font-semibold text-blue-900 mb-2">📋 Quiz Preview</h4>
+                    <div className="space-y-2">
+                      {quiz.questions.slice(0, 3).map((question, index) => (
+                        <div key={index} className="text-sm text-blue-800">
+                          <span className="font-medium">{index + 1}.</span> {question.question?.substring(0, 60) || 'Question text unavailable'}...
+                        </div>
+                      ))}
+                      {quiz.questions.length > 3 && (
+                        <div className="text-sm text-blue-700 font-medium">
+                          ...and {quiz.questions.length - 3} more questions
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4">
+                    <button
+                      onClick={startQuiz}
+                      className="flex-1 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-lg hover:shadow-lg transition-all flex items-center justify-center gap-2"
+                    >
+                      <Brain size={20} />
+                      Start Test
+                    </button>
+                    <button
+                      onClick={() => {
+                        setView('create');
+                        setQuiz(null);
+                      }}
+                      className="px-6 py-3 border border-gray-300 text-gray-900 font-semibold rounded-lg hover:bg-gray-50 transition-all"
+                    >
+                      Generate Another
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         ) : submitted ? (
           <div className="max-w-2xl mx-auto">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
@@ -358,14 +1458,14 @@ export const QuizPage: React.FC = () => {
               <div className="text-center mb-8">
                 <p className="text-6xl font-bold text-blue-600">{score.toFixed(0)}%</p>
                 <p className="text-gray-600 mt-2">
-                  {Math.round((score / 100) * (quiz?.questions.length || 0))} of {quiz?.questions.length} correct
+                  {Math.round((score / 100) * (selectedQuiz?.questions.length || 0))} of {selectedQuiz?.questions.length} correct
                 </p>
               </div>
 
               <div className="space-y-4 mb-8">
-                {quiz?.questions.map((question, index) => (
+                {selectedQuiz?.questions.map((question, index) => (
                   <div key={index} className="bg-gray-50 p-4 rounded-lg">
-                    <p className="font-medium text-gray-900 mb-2">{question.text}</p>
+                    <p className="font-medium text-gray-900 mb-2">{question.question}</p>
                     <div className="space-y-2">
                       {question.options.map((option, optIndex) => (
                         <div
@@ -402,9 +1502,16 @@ export const QuizPage: React.FC = () => {
                 <button
                   onClick={() => {
                     // Retake the same quiz
+                    const estimatedMinutes = Math.ceil(quiz!.questions.length * 1.5);
+                    setTimeRemaining(estimatedMinutes * 60);
+                    setShowCalculator(false); // Hide calculator initially
+                    setCalcDisplay('0'); // Reset calculator
+                    setCalcPreviousValue(null);
+                    setCalcOperation(null);
+                    setCalcWaitingForOperand(false);
                     setView('taking');
                     setCurrentQuestion(0);
-                    setAnswers(new Array(quiz?.questions.length || 0).fill(-1));
+                    setAnswers(new Array(selectedQuiz?.questions.length || 0).fill(-1));
                     setSubmitted(false);
                     setScore(0);
                     // Don't reset attempt number for retakes
@@ -439,35 +1546,47 @@ export const QuizPage: React.FC = () => {
           <div className="max-w-3xl mx-auto">
             <div className="mb-6">
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-2xl font-bold text-gray-900">{quiz?.title}</h2>
-                <button
-                  onClick={() => {
-                    setView('create');
-                    setQuiz(null);
-                  }}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                >
-                  Exit Quiz
-                </button>
+                <h2 className="text-2xl font-bold text-gray-900">{selectedQuiz?.title}</h2>
+                <div className="flex items-center gap-4">
+                  <div className="text-lg font-semibold text-gray-700">
+                    Time: {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}
+                  </div>
+                  <button
+                    onClick={() => setShowCalculator(!showCalculator)}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
+                  >
+                    <Calculator size={16} />
+                    {showCalculator ? 'Hide Calculator' : 'Show Calculator'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setView('dashboard');
+                      setSelectedQuiz(null);
+                    }}
+                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
+                    Exit Quiz
+                  </button>
+                </div>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div
                   className="bg-blue-600 h-2 rounded-full transition-all"
-                  style={{ width: `${((currentQuestion + 1) / (quiz?.questions.length || 1)) * 100}%` }}
+                  style={{ width: `${((currentQuestion + 1) / (selectedQuiz?.questions.length || 1)) * 100}%` }}
                 ></div>
               </div>
               <p className="text-sm text-gray-600 mt-2">
-                Question {currentQuestion + 1} of {quiz?.questions.length}
+                Question {currentQuestion + 1} of {selectedQuiz?.questions.length}
               </p>
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
               <h3 className="text-xl font-semibold text-gray-900 mb-6">
-                {quiz?.questions[currentQuestion].text}
+                {selectedQuiz?.questions[currentQuestion].question}
               </h3>
 
               <div className="space-y-3 mb-8">
-                {quiz?.questions[currentQuestion].options.map((option, index) => (
+                {selectedQuiz?.questions[currentQuestion].options.map((option, index) => (
                   <button
                     key={index}
                     onClick={() => handleAnswer(index)}
@@ -502,7 +1621,7 @@ export const QuizPage: React.FC = () => {
                   Previous
                 </button>
 
-                {currentQuestion === (quiz?.questions.length || 0) - 1 ? (
+                {currentQuestion === (selectedQuiz?.questions.length || 0) - 1 ? (
                   <button
                     onClick={handleSubmit}
                     className="flex-1 px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg hover:shadow-lg transition-all"
@@ -523,7 +1642,7 @@ export const QuizPage: React.FC = () => {
               <div className="mt-8 pt-8 border-t border-gray-200">
                 <p className="text-sm font-medium text-gray-900 mb-3">Questions:</p>
                 <div className="grid grid-cols-5 md:grid-cols-10 gap-2">
-                  {quiz?.questions.map((_, index) => (
+                  {selectedQuiz?.questions.map((_, index) => (
                     <button
                       key={index}
                       onClick={() => setCurrentQuestion(index)}
@@ -540,6 +1659,137 @@ export const QuizPage: React.FC = () => {
                   ))}
                 </div>
               </div>
+
+              {/* Calculator */}
+              {showCalculator && (
+                <div className="mt-8 pt-8 border-t border-gray-200">
+                  <div className="bg-gray-50 rounded-lg p-4 max-w-sm mx-auto">
+                    <div className="bg-white rounded-lg p-4 shadow-sm">
+                      {/* Calculator Display */}
+                      <div className="bg-gray-100 rounded p-3 mb-4">
+                        <div className="text-right text-xl font-mono font-bold text-gray-900 overflow-hidden">
+                          {calcDisplay}
+                        </div>
+                      </div>
+
+                      {/* Calculator Buttons */}
+                      <div className="grid grid-cols-4 gap-2">
+                        {/* Row 1 */}
+                        <button
+                          onClick={calcClear}
+                          className="col-span-2 bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-2 rounded text-sm transition-colors"
+                        >
+                          Clear
+                        </button>
+                        <button
+                          onClick={() => calcInputOperation('/')}
+                          className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-2 rounded text-sm transition-colors"
+                        >
+                          ÷
+                        </button>
+                        <button
+                          onClick={() => calcInputOperation('*')}
+                          className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-2 rounded text-sm transition-colors"
+                        >
+                          ×
+                        </button>
+
+                        {/* Row 2 */}
+                        <button
+                          onClick={() => calcInputNumber('7')}
+                          className="bg-gray-200 hover:bg-gray-300 text-gray-900 font-semibold py-3 px-2 rounded text-sm transition-colors"
+                        >
+                          7
+                        </button>
+                        <button
+                          onClick={() => calcInputNumber('8')}
+                          className="bg-gray-200 hover:bg-gray-300 text-gray-900 font-semibold py-3 px-2 rounded text-sm transition-colors"
+                        >
+                          8
+                        </button>
+                        <button
+                          onClick={() => calcInputNumber('9')}
+                          className="bg-gray-200 hover:bg-gray-300 text-gray-900 font-semibold py-3 px-2 rounded text-sm transition-colors"
+                        >
+                          9
+                        </button>
+                        <button
+                          onClick={() => calcInputOperation('-')}
+                          className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-2 rounded text-sm transition-colors"
+                        >
+                          −
+                        </button>
+
+                        {/* Row 3 */}
+                        <button
+                          onClick={() => calcInputNumber('4')}
+                          className="bg-gray-200 hover:bg-gray-300 text-gray-900 font-semibold py-3 px-2 rounded text-sm transition-colors"
+                        >
+                          4
+                        </button>
+                        <button
+                          onClick={() => calcInputNumber('5')}
+                          className="bg-gray-200 hover:bg-gray-300 text-gray-900 font-semibold py-3 px-2 rounded text-sm transition-colors"
+                        >
+                          5
+                        </button>
+                        <button
+                          onClick={() => calcInputNumber('6')}
+                          className="bg-gray-200 hover:bg-gray-300 text-gray-900 font-semibold py-3 px-2 rounded text-sm transition-colors"
+                        >
+                          6
+                        </button>
+                        <button
+                          onClick={() => calcInputOperation('+')}
+                          className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-2 rounded text-sm transition-colors"
+                        >
+                          +
+                        </button>
+
+                        {/* Row 4 */}
+                        <button
+                          onClick={() => calcInputNumber('1')}
+                          className="bg-gray-200 hover:bg-gray-300 text-gray-900 font-semibold py-3 px-2 rounded text-sm transition-colors"
+                        >
+                          1
+                        </button>
+                        <button
+                          onClick={() => calcInputNumber('2')}
+                          className="bg-gray-200 hover:bg-gray-300 text-gray-900 font-semibold py-3 px-2 rounded text-sm transition-colors"
+                        >
+                          2
+                        </button>
+                        <button
+                          onClick={() => calcInputNumber('3')}
+                          className="bg-gray-200 hover:bg-gray-300 text-gray-900 font-semibold py-3 px-2 rounded text-sm transition-colors"
+                        >
+                          3
+                        </button>
+                        <button
+                          onClick={calcPerformCalculation}
+                          className="row-span-2 bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-2 rounded text-sm transition-colors"
+                        >
+                          =
+                        </button>
+
+                        {/* Row 5 */}
+                        <button
+                          onClick={() => calcInputNumber('0')}
+                          className="col-span-2 bg-gray-200 hover:bg-gray-300 text-gray-900 font-semibold py-3 px-2 rounded text-sm transition-colors"
+                        >
+                          0
+                        </button>
+                        <button
+                          onClick={calcInputDecimal}
+                          className="bg-gray-200 hover:bg-gray-300 text-gray-900 font-semibold py-3 px-2 rounded text-sm transition-colors"
+                        >
+                          .
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

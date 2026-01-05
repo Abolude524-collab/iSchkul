@@ -21,7 +21,9 @@ export const Navbar: React.FC = () => {
     { label: 'Home', path: '/' },
     { label: 'About', path: '/about' },
     { label: 'Dashboard', path: '/dashboard', protected: true },
+    { label: 'Quiz', path: '/quiz', protected: true },
     { label: 'Flashcards', path: '/flashcards', protected: true },
+    { label: 'Calculator', path: '/calculator', protected: true },
     { label: 'Leaderboard', path: '/leaderboard', protected: true },
     { label: 'Admin', path: '/admin', protected: true, adminOnly: true },
   ];

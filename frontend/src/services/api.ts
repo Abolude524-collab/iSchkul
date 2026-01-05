@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+const API_BASE_URL = '/api'
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -69,8 +69,10 @@ export const personalChatAPI = {
 
 // Gamification endpoints
 export const gamificationAPI = {
-  awardXp: (activityType: string) =>
+  awardXP: (activityType: string) =>
     apiClient.post('/gamification/award', { activity_type: activityType }),
+  getUserStats: () =>
+    apiClient.get('/gamification/activity'),
   userEnter: () =>
     apiClient.post('/gamification/enter'),
   getLeaderboard: () =>
@@ -91,7 +93,7 @@ export const gamificationAPI = {
 
 // Leaderboard management endpoints
 export const leaderboardAPI = {
-  createLeaderboard: (data: { title: string; description?: string; durationDays: number; prizes?: string[] }) =>
+  createLeaderboard: (data: { title: string; description?: string; durationDays: number; prizes?: string[]; isRestricted?: boolean; allowedUsers?: string[] }) =>
     apiClient.post('/leaderboard/create', data),
   listLeaderboards: () =>
     apiClient.get('/leaderboard/list'),
@@ -133,6 +135,14 @@ export const flashcardSetsAPI = {
     apiClient.post('/flashcard-sets/add-cards', data),
   getShareLink: (setId: string) =>
     apiClient.get('/flashcard-sets/share-link', { params: { setId } }),
+}
+
+// Users endpoints
+export const usersAPI = {
+  searchUsers: (query: string) =>
+    apiClient.get('/users/search', { params: { q: query } }),
+  getUser: (userId: string) =>
+    apiClient.get(`/users/${userId}`),
 }
 
 // Flashcard endpoints

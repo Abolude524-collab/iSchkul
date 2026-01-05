@@ -1,0 +1,178 @@
+const express = require('express');
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+const auth = require('../middleware/auth');
+
+const router = express.Router();
+
+// Register
+router.post('/register', async (req, res) => {
+  try {
+    const { username, email, password, name, studentcategory, institution, securityQuestion, securityAnswer } = req.body;
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ $or: [{ email }, { username }] });
+    if (existingUser) {
+      return res.status(400).json({ error: 'User already exists' });
+    }
+
+    // Create new user
+    const user = new User({ 
+      username, 
+      email, 
+      password, 
+      name, 
+      studentCategory: studentcategory, 
+      institution, 
+      securityQuestion, 
+      securityAnswer 
+    });
+    await user.save();
+
+    // Generate token
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+    res.status(201).json({
+      token,
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        name: user.name,
+        studentCategory: user.studentCategory,
+        institution: user.institution,
+        avatar: user.avatar,
+        xp: user.xp,
+        level: user.level
+      }
+    });
+  } catch (error) {
+    console.error('Register error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Login
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Find user by email or username
+    const user = await User.findOne({ 
+      $or: [{ email: email }, { username: email }] 
+    });
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid credentials' });
+    }
+
+    // Check password
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
+      return res.status(400).json({ error: 'Invalid credentials' });
+    }
+
+    // Update last active
+    user.lastActive = new Date();
+    await user.save();
+
+    // Generate token
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+    res.json({
+      token,
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        name: user.name,
+        studentCategory: user.studentCategory,
+        institution: user.institution,
+        isAdmin: user.isAdmin,
+        role: user.role,
+        avatar: user.avatar,
+        xp: user.xp,
+        level: user.level
+      }
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Get current user
+router.get('/me', auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('-password');
+    res.json({ user });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Update profile
+router.put('/profile', auth, async (req, res) => {
+  try {
+    const { name, avatar } = req.body;
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { name, avatar },
+      { new: true }
+    ).select('-password');
+    res.json({ user });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Forgot password - get security question
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (!user.securityQuestion) {
+      return res.status(400).json({ error: 'Security question not set for this account' });
+    }
+
+    res.json({
+      securityQuestion: user.securityQuestion,
+      userId: user._id
+    });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Reset password - verify security answer and update password
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { email, securityAnswer, newPassword } = req.body;
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Check security answer (case insensitive)
+    if (user.securityAnswer.toLowerCase() !== securityAnswer.toLowerCase()) {
+      return res.status(400).json({ error: 'Incorrect security answer' });
+    }
+
+    // Update password
+    user.password = newPassword;
+    await user.save();
+
+    res.json({ message: 'Password reset successfully' });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+module.exports = router;

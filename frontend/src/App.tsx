@@ -14,6 +14,7 @@ import { ChatPage } from './pages/ChatPage';
 import { ReaderPage } from './pages/ReaderPage';
 import { AdminPage } from './pages/AdminPage';
 import { LeaderboardPage } from './pages/LeaderboardPage';
+import { CalculatorPage } from './pages/CalculatorPage';
 import { useAuthStore } from './services/store';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -63,6 +64,14 @@ function App() {
           element={
             <ProtectedRoute>
               <LeaderboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/calculator"
+          element={
+            <ProtectedRoute>
+              <CalculatorPage />
             </ProtectedRoute>
           }
         />

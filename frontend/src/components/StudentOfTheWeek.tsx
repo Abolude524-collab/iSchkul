@@ -3,14 +3,19 @@ import { sotwAPI } from '../services/api';
 import { Crown, Trophy, Calendar, Award } from 'lucide-react';
 
 interface SOTW {
-  _id: string;
-  userId: string;
+  user_id: string;
   name: string;
+  user: {
+    name: string;
+    institution: string;
+    profilePicture?: string;
+    username: string;
+  };
   institution: string;
-  totalXP: number;
-  weekStart: string;
-  weekEnd: string;
-  badge: string;
+  weekly_score: number;
+  start_date: string;
+  end_date: string;
+  winner_quote: string;
 }
 
 interface CurrentSOTW {
@@ -30,8 +35,14 @@ export const StudentOfTheWeek: React.FC = () => {
   const loadSOTWData = async () => {
     try {
       setLoading(true);
-      const response = await sotwAPI.getCurrentSOTW();
-      setSotwData(response.data);
+      const [currentResponse, archiveResponse] = await Promise.all([
+        sotwAPI.getCurrent(),
+        sotwAPI.getArchive()
+      ]);
+      setSotwData({
+        current: currentResponse.data.winner,
+        previous: archiveResponse.data.archive || []
+      });
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -81,19 +92,19 @@ export const StudentOfTheWeek: React.FC = () => {
             <div className="flex items-center gap-4 text-sm">
               <div className="flex items-center gap-1">
                 <Award size={16} />
-                <span>{sotwData.current.totalXP} XP earned</span>
+                <span>{sotwData.current.weekly_score} XP earned</span>
               </div>
               <div className="flex items-center gap-1">
                 <Calendar size={16} />
                 <span>
-                  {new Date(sotwData.current.weekStart).toLocaleDateString()} - {new Date(sotwData.current.weekEnd).toLocaleDateString()}
+                  {new Date(sotwData.current.start_date).toLocaleDateString()} - {new Date(sotwData.current.end_date).toLocaleDateString()}
                 </span>
               </div>
             </div>
             <div className="mt-4">
               <span className="inline-flex items-center gap-1 bg-white/20 px-3 py-1 rounded-full text-sm font-medium">
                 <Award size={14} />
-                {sotwData.current.badge}
+                Student of the Week
               </span>
             </div>
           </div>
@@ -118,10 +129,10 @@ export const StudentOfTheWeek: React.FC = () => {
                 </div>
                 <div className="flex-1">
                   <p className="font-medium text-gray-900">{winner.name}</p>
-                  <p className="text-sm text-gray-500">{winner.totalXP} XP • {new Date(winner.weekStart).toLocaleDateString()}</p>
+                  <p className="text-sm text-gray-500">{winner.weekly_score} XP • {new Date(winner.start_date).toLocaleDateString()}</p>
                 </div>
                 <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
-                  {winner.badge}
+                  Winner
                 </span>
               </div>
             ))}

@@ -36,7 +36,7 @@ export const ReaderPage: React.FC = () => {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:7071'}/api/chat/send`,
+        `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/chat/send`,
         {
           method: 'POST',
           headers: {
@@ -95,7 +95,7 @@ export const ReaderPage: React.FC = () => {
       formData.append('file', file);
 
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:7071'}/api/files/upload`,
+        `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/files/upload`,
         {
           method: 'POST',
           headers: {

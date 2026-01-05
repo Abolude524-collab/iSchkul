@@ -22,51 +22,40 @@ import {
   UserX,
   Send,
   Calendar,
-  BookOpen,
-  Brain,
-  MessageSquare,
-  FileText,
   Trophy,
   Target,
-  Award
+  Award,
+  Crown,
+  UserPlus,
+  UserMinus,
+  MessageSquare,
+  Plus,
+  Edit,
+  Lock,
+  Unlock
 } from 'lucide-react';
 
 interface AnalyticsData {
-  overview: {
-    totalUsers: number;
-    totalQuizzes: number;
-    totalFlashcards: number;
-    totalMessages: number;
-    activeUsers: number;
-    newUsersToday: number;
-    quizAttempts: number;
-    avgScore: number;
-  };
-  userGrowth: Array<{ date: string; count: number }>;
-  quizPerformance: Array<{ subject: string; avgScore: number; attempts: number }>;
-  featureUsage: {
-    quizzes: number;
-    flashcards: number;
-    chat: number;
-    files: number;
-  };
-  recentActivity: Array<{
-    type: string;
-    user: string;
-    action: string;
-    timestamp: string;
-  }>;
+  totalUsers: number;
+  activeUsers: number;
+  adminUsers: number;
+  totalQuizzes: number;
+  totalFlashcards: number;
+  totalGroups: number;
+  recentActivity: any[];
 }
 
 interface User {
   _id: string;
+  username: string;
   email: string;
-  displayName: string;
+  name: string;
   role: string;
+  isAdmin: boolean;
   xp: number;
+  level: number;
   createdAt: string;
-  lastLogin?: string;
-  isActive: boolean;
+  lastActive: string;
 }
 
 interface Leaderboard {
@@ -76,37 +65,41 @@ interface Leaderboard {
   startDate: string;
   endDate: string;
   prizes: string[];
-  rankings: Array<{
-    userId: string;
-    name: string;
-    total_xp: number;
-    rank: number;
-  }>;
   status: 'active' | 'ended';
+  participantCount?: number;
+  isRestricted?: boolean;
+  allowedUsers?: string[];
 }
 
 export const AdminPage: React.FC = () => {
   const { user } = useAuthStore();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'analytics' | 'notifications' | 'leaderboards' | 'system'>('overview');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'leaderboards' | 'notifications'>('dashboard');
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [leaderboards, setLeaderboards] = useState<Leaderboard[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Notification form
   const [notificationForm, setNotificationForm] = useState({
     title: '',
     message: '',
-    targetUsers: 'all',
     type: 'info'
   });
+
+  // Leaderboard form
   const [leaderboardForm, setLeaderboardForm] = useState({
     title: '',
     description: '',
-    startDate: '',
-    endDate: '',
-    prizes: ['']
+    durationDays: 7,
+    prizes: [''],
+    isRestricted: false,
+    allowedUsers: [] as string[]
   });
+
+  const [showLeaderboardForm, setShowLeaderboardForm] = useState(false);
+  const [editingLeaderboard, setEditingLeaderboard] = useState<Leaderboard | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -114,7 +107,7 @@ export const AdminPage: React.FC = () => {
       return;
     }
 
-    if (!user.isAdmin) {
+    if (!user.isAdmin && user.role !== 'admin' && user.role !== 'superadmin') {
       navigate('/dashboard');
       return;
     }
@@ -129,7 +122,7 @@ export const AdminPage: React.FC = () => {
 
       // Load analytics
       const analyticsResponse = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:7071'}/api/analytics/overview`,
+        `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/admin/analytics/overview`,
         {
           headers: { Authorization: `Bearer ${token}` }
         }
@@ -142,7 +135,7 @@ export const AdminPage: React.FC = () => {
 
       // Load users
       const usersResponse = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:7071'}/api/admin/users`,
+        `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/admin/users`,
         {
           headers: { Authorization: `Bearer ${token}` }
         }
@@ -154,7 +147,7 @@ export const AdminPage: React.FC = () => {
       }
 
       // Load leaderboards
-      const leaderboardsResponse = await leaderboardAPI.getAllLeaderboards();
+      const leaderboardsResponse = await leaderboardAPI.listLeaderboards();
       if (leaderboardsResponse.data) {
         setLeaderboards(leaderboardsResponse.data.leaderboards || []);
       }
@@ -171,7 +164,7 @@ export const AdminPage: React.FC = () => {
     try {
       const token = localStorage.getItem('authToken');
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:7071'}/api/admin/notifications/send`,
+        `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/admin/notifications/send`,
         {
           method: 'POST',
           headers: {
@@ -183,8 +176,9 @@ export const AdminPage: React.FC = () => {
       );
 
       if (response.ok) {
-        setNotificationForm({ title: '', message: '', targetUsers: 'all', type: 'info' });
+        setNotificationForm({ title: '', message: '', type: 'info' });
         alert('Notification sent successfully!');
+        loadData();
       } else {
         throw new Error('Failed to send notification');
       }
@@ -197,7 +191,7 @@ export const AdminPage: React.FC = () => {
     try {
       const token = localStorage.getItem('authToken');
       await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:7071'}/api/admin/users/role`,
+        `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/admin/users/role`,
         {
           method: 'PUT',
           headers: {
@@ -213,43 +207,27 @@ export const AdminPage: React.FC = () => {
     }
   };
 
-  const deleteUser = async (userId: string) => {
-    if (!confirm('Are you sure you want to delete this user?')) return;
-
-    try {
-      const token = localStorage.getItem('authToken');
-      await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:7071'}/api/admin/users`,
-        {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
-          },
-          body: JSON.stringify({ userId })
-        }
-      );
-      loadData(); // Refresh data
-    } catch (err: any) {
-      alert('Error deleting user: ' + err.message);
-    }
-  };
-
   const createLeaderboard = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       await leaderboardAPI.createLeaderboard({
-        ...leaderboardForm,
-        prizes: leaderboardForm.prizes.filter(prize => prize.trim() !== '')
+        title: leaderboardForm.title,
+        description: leaderboardForm.description,
+        durationDays: leaderboardForm.durationDays,
+        prizes: leaderboardForm.prizes.filter(prize => prize.trim() !== ''),
+        isRestricted: leaderboardForm.isRestricted,
+        allowedUsers: leaderboardForm.allowedUsers
       });
       setLeaderboardForm({
         title: '',
         description: '',
-        startDate: '',
-        endDate: '',
-        prizes: ['']
+        durationDays: 7,
+        prizes: [''],
+        isRestricted: false,
+        allowedUsers: []
       });
-      loadData(); // Refresh data
+      setShowLeaderboardForm(false);
+      loadData();
     } catch (err: any) {
       alert('Error creating leaderboard: ' + err.message);
     }
@@ -260,7 +238,7 @@ export const AdminPage: React.FC = () => {
 
     try {
       await leaderboardAPI.endLeaderboard(leaderboardId);
-      loadData(); // Refresh data
+      loadData();
     } catch (err: any) {
       alert('Error ending leaderboard: ' + err.message);
     }
@@ -289,6 +267,14 @@ export const AdminPage: React.FC = () => {
     });
   };
 
+  const getRoleBadgeColor = (role: string) => {
+    switch (role) {
+      case 'superadmin': return 'bg-red-100 text-red-800';
+      case 'admin': return 'bg-blue-100 text-blue-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col bg-gray-50">
@@ -305,45 +291,472 @@ export const AdminPage: React.FC = () => {
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Navbar />
 
-      <div className="flex-grow max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Admin Dashboard</h1>
-          <p className="text-gray-600">Manage users, monitor analytics, and control system settings</p>
-        </div>
-
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex gap-3">
-            <AlertTriangle size={20} className="text-red-600 flex-shrink-0 mt-0.5" />
-            <p className="text-red-700">{error}</p>
+      <div className="flex-grow">
+        {/* Header */}
+        <div className="bg-white shadow-sm border-b">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="py-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+                    <Shield className="h-8 w-8 text-blue-600" />
+                    Admin Dashboard
+                  </h1>
+                  <p className="mt-2 text-gray-600">Manage users, analytics, and platform settings</p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <p className="text-sm text-gray-500">Welcome back</p>
+                    <p className="font-semibold text-gray-900">{user?.name}</p>
+                  </div>
+                  <div className="h-10 w-10 bg-blue-600 rounded-full flex items-center justify-center">
+                    <Crown className="h-6 w-6 text-white" />
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-        )}
-
-        {/* Tab Navigation */}
-        <div className="mb-8">
-          <nav className="flex space-x-8 border-b border-gray-200">
-            {[
-              { id: 'overview', label: 'Overview', icon: BarChart3 },
-              { id: 'users', label: 'User Management', icon: Users },
-              { id: 'analytics', label: 'Analytics', icon: TrendingUp },
-              { id: 'leaderboards', label: 'Leaderboards', icon: Trophy },
-              { id: 'notifications', label: 'Notifications', icon: Bell },
-              { id: 'system', label: 'System', icon: Settings }
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <tab.icon size={18} />
-                {tab.label}
-              </button>
-            ))}
-          </nav>
         </div>
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Navigation Tabs */}
+          <div className="mb-8">
+            <nav className="flex space-x-8">
+              {[
+                { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
+                { id: 'users', label: 'User Management', icon: Users },
+                { id: 'leaderboards', label: 'Leaderboards', icon: Trophy },
+                { id: 'notifications', label: 'Notifications', icon: Bell }
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                    activeTab === tab.id
+                      ? 'bg-blue-100 text-blue-700 border-b-2 border-blue-600'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
+                >
+                  <tab.icon className="h-5 w-5" />
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
+          </div>
+
+          {/* Dashboard Tab */}
+          {activeTab === 'dashboard' && (
+            <div className="space-y-8">
+              {/* Analytics Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="bg-white rounded-lg shadow-sm border p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Total Users</p>
+                      <p className="text-3xl font-bold text-gray-900">{analytics?.totalUsers || 0}</p>
+                    </div>
+                    <Users className="h-8 w-8 text-blue-600" />
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-lg shadow-sm border p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Active Users</p>
+                      <p className="text-3xl font-bold text-gray-900">{analytics?.activeUsers || 0}</p>
+                    </div>
+                    <Activity className="h-8 w-8 text-green-600" />
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-lg shadow-sm border p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Admin Users</p>
+                      <p className="text-3xl font-bold text-gray-900">{analytics?.adminUsers || 0}</p>
+                    </div>
+                    <Shield className="h-8 w-8 text-purple-600" />
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-lg shadow-sm border p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Active Leaderboards</p>
+                      <p className="text-3xl font-bold text-gray-900">
+                        {leaderboards.filter(l => l.status === 'active').length}
+                      </p>
+                    </div>
+                    <Trophy className="h-8 w-8 text-yellow-600" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Recent Activity */}
+              <div className="bg-white rounded-lg shadow-sm border">
+                <div className="px-6 py-4 border-b">
+                  <h3 className="text-lg font-semibold text-gray-900">Recent Activity</h3>
+                </div>
+                <div className="p-6">
+                  {analytics?.recentActivity?.length > 0 ? (
+                    <div className="space-y-4">
+                      {analytics.recentActivity.map((activity, index) => (
+                        <div key={index} className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
+                          <div className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center">
+                            <Activity className="h-4 w-4 text-blue-600" />
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-900">{activity.user}</p>
+                            <p className="text-sm text-gray-600">{activity.action}</p>
+                          </div>
+                          <span className="text-xs text-gray-500">{activity.timestamp}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 text-center py-8">No recent activity</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Users Tab */}
+          {activeTab === 'users' && (
+            <div className="space-y-6">
+              <div className="bg-white rounded-lg shadow-sm border">
+                <div className="px-6 py-4 border-b">
+                  <h3 className="text-lg font-semibold text-gray-900">User Management</h3>
+                  <p className="text-sm text-gray-600">View and manage all platform users</p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">XP</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {users.map((user) => (
+                        <tr key={user._id}>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <div className="h-10 w-10 bg-gray-300 rounded-full flex items-center justify-center">
+                                <span className="text-sm font-medium text-gray-700">
+                                  {user.name?.charAt(0)?.toUpperCase() || user.username?.charAt(0)?.toUpperCase()}
+                                </span>
+                              </div>
+                              <div className="ml-4">
+                                <div className="text-sm font-medium text-gray-900">{user.name || user.username}</div>
+                                <div className="text-sm text-gray-500">{user.email}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getRoleBadgeColor(user.role)}`}>
+                              {user.role}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {user.xp} XP (Level {user.level})
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {new Date(user.createdAt).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <div className="flex gap-2">
+                              {user.role !== 'superadmin' && (
+                                <>
+                                  {user.role === 'user' ? (
+                                    <button
+                                      onClick={() => updateUserRole(user._id, 'admin')}
+                                      className="text-blue-600 hover:text-blue-900 flex items-center gap-1"
+                                    >
+                                      <UserPlus className="h-4 w-4" />
+                                      Promote
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => updateUserRole(user._id, 'user')}
+                                      className="text-orange-600 hover:text-orange-900 flex items-center gap-1"
+                                    >
+                                      <UserMinus className="h-4 w-4" />
+                                      Demote
+                                    </button>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Leaderboards Tab */}
+          {activeTab === 'leaderboards' && (
+            <div className="space-y-6">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Leaderboard Management</h3>
+                  <p className="text-sm text-gray-600">Create and manage leaderboard competitions</p>
+                </div>
+                <button
+                  onClick={() => setShowLeaderboardForm(true)}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                >
+                  <Plus className="h-4 w-4" />
+                  Create Leaderboard
+                </button>
+              </div>
+
+              {/* Leaderboard Form */}
+              {showLeaderboardForm && (
+                <div className="bg-white rounded-lg shadow-sm border p-6">
+                  <h4 className="text-lg font-semibold mb-4">Create New Leaderboard</h4>
+                  <form onSubmit={createLeaderboard} className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                      <input
+                        type="text"
+                        value={leaderboardForm.title}
+                        onChange={(e) => setLeaderboardForm({...leaderboardForm, title: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                      <textarea
+                        value={leaderboardForm.description}
+                        onChange={(e) => setLeaderboardForm({...leaderboardForm, description: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        rows={3}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Duration (days)</label>
+                      <input
+                        type="number"
+                        value={leaderboardForm.durationDays}
+                        onChange={(e) => setLeaderboardForm({...leaderboardForm, durationDays: parseInt(e.target.value)})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        min="1"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Prizes</label>
+                      {leaderboardForm.prizes.map((prize, index) => (
+                        <div key={index} className="flex gap-2 mb-2">
+                          <input
+                            type="text"
+                            value={prize}
+                            onChange={(e) => updatePrizeField(index, e.target.value)}
+                            placeholder={`Prize ${index + 1}`}
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          {leaderboardForm.prizes.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removePrizeField(index)}
+                              className="px-3 py-2 text-red-600 hover:text-red-800"
+                            >
+                              <XCircle className="h-5 w-5" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={addPrizeField}
+                        className="text-blue-600 hover:text-blue-800 text-sm flex items-center gap-1"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Add Prize
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="restricted"
+                        checked={leaderboardForm.isRestricted}
+                        onChange={(e) => setLeaderboardForm({...leaderboardForm, isRestricted: e.target.checked})}
+                        className="rounded"
+                      />
+                      <label htmlFor="restricted" className="text-sm text-gray-700">
+                        Restrict to specific users only
+                      </label>
+                    </div>
+
+                    <div className="flex gap-3">
+                      <button
+                        type="submit"
+                        className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                      >
+                        Create Leaderboard
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowLeaderboardForm(false)}
+                        className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {/* Leaderboards List */}
+              <div className="bg-white rounded-lg shadow-sm border">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Participants</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">End Date</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {leaderboards.map((leaderboard) => (
+                        <tr key={leaderboard._id}>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">{leaderboard.title}</div>
+                              <div className="text-sm text-gray-500">{leaderboard.description}</div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                              leaderboard.status === 'active'
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-gray-100 text-gray-800'
+                            }`}>
+                              {leaderboard.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {leaderboard.participantCount || 0}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {new Date(leaderboard.endDate).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <div className="flex gap-2">
+                              {leaderboard.status === 'active' && (
+                                <button
+                                  onClick={() => endLeaderboard(leaderboard._id)}
+                                  className="text-red-600 hover:text-red-900 flex items-center gap-1"
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                  End
+                                </button>
+                              )}
+                              <button className="text-blue-600 hover:text-blue-900 flex items-center gap-1">
+                                <Eye className="h-4 w-4" />
+                                View
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Notifications Tab */}
+          {activeTab === 'notifications' && (
+            <div className="space-y-6">
+              <div className="bg-white rounded-lg shadow-sm border p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Send Notification</h3>
+                <p className="text-sm text-gray-600 mb-6">Send notifications to all users or specific groups</p>
+
+                <form onSubmit={sendNotification} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                    <input
+                      type="text"
+                      value={notificationForm.title}
+                      onChange={(e) => setNotificationForm({...notificationForm, title: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Notification title"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                    <textarea
+                      value={notificationForm.message}
+                      onChange={(e) => setNotificationForm({...notificationForm, message: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      rows={4}
+                      placeholder="Notification message"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                    <select
+                      value={notificationForm.type}
+                      onChange={(e) => setNotificationForm({...notificationForm, type: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="info">Info</option>
+                      <option value="success">Success</option>
+                      <option value="warning">Warning</option>
+                      <option value="error">Error</option>
+                    </select>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                  >
+                    <Send className="h-4 w-4" />
+                    Send Notification
+                  </button>
+                </form>
+              </div>
+
+              {/* Recent Notifications */}
+              <div className="bg-white rounded-lg shadow-sm border">
+                <div className="px-6 py-4 border-b">
+                  <h3 className="text-lg font-semibold text-gray-900">Recent Notifications</h3>
+                </div>
+                <div className="p-6">
+                  <p className="text-gray-500 text-center py-8">Notification history will be displayed here</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <Footer />
+    </div>
+  );
+};
 
         {/* Overview Tab */}
         {activeTab === 'overview' && analytics && (

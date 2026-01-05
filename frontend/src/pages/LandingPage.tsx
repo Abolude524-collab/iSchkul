@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, BookOpen, MessageSquare, Zap, Users, Brain, Shield } from 'lucide-react';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
+import { StudentOfTheWeek } from '../components/StudentOfTheWeek';
 
 export const LandingPage: React.FC = () => {
   const features = [
@@ -106,6 +107,17 @@ export const LandingPage: React.FC = () => {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* Student of the Week Section */}
+      <section className="py-16 bg-white">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-8">
+            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">Celebrating Excellence</h2>
+            <p className="text-gray-600">Meet our top performers who are leading the way in academic achievement</p>
+          </div>
+          <StudentOfTheWeek />
         </div>
       </section>
 

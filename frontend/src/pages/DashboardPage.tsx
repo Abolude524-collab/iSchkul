@@ -41,11 +41,7 @@ export const DashboardPage: React.FC = () => {
 
   const awardDailyXP = async () => {
     try {
-      await gamificationAPI.awardXP({
-        activityType: 'DAILY_STREAK',
-        xpAmount: 5,
-        description: 'Daily app entry reward'
-      });
+      await gamificationAPI.awardXP('DAILY_STREAK');
       // Refresh stats after awarding XP
       await fetchUserStats();
     } catch (error) {
