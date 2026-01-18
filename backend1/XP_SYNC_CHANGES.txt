@@ -1,0 +1,61 @@
+# XP Leaderboard Sync - Summary of Changes
+
+## Problem
+User's XP (e.g., 210 in database) wasn't syncing to the leaderboard display.
+
+## Root Cause
+**Quiz submission wasn't creating XP logs or properly updating user XP**
+- The `awardXp()` function wasn't being called with the correct parameters
+- No fallback if the function wasn't available
+- XP logs weren't being created for SOTW calculation
+
+## Changes Made
+
+### 1. Fixed Quiz XP Award Logic ✅
+**File**: `backend1/routes/quizzes.js`
+- Added XpLog import
+- Enhanced XP award with dual-path approach:
+  - Primary: Use app.locals.awardXp if available
+  - Fallback: Directly create XpLog and update User.xp
+- Now passes correct xpAmount parameter
+- Added comprehensive error logging
+
+### 2. Added Admin Sync Tools ✅
+**File**: `backend1/routes/admin.js`
+- `POST /api/admin/sync-xp` - Sync single user's XP with XP logs
+- `POST /api/admin/sync-all-xp` - Sync all users' XP
+- `POST /api/admin/recalculate-sotw` - Recalculate Student of the Week
+- `GET /api/admin/xp-debug/:userId` - Debug XP sync for specific user
+
+### 3. Created Diagnostic Scripts ✅
+- `backend1/diagnose_xp_sync.js` - Check XP sync status for a user
+- `backend1/check_sotw_winner.js` - Verify SOTW calculation
+
+## How to Fix User with 210 XP
+
+### Quick Fix (Admin)
+```bash
+# Sync their XP with XP logs
+curl -X POST http://localhost:5000/api/admin/sync-xp \
+  -H "Authorization: Bearer <ADMIN_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"userId": "USER_ID"}'
+```
+
+### Or Sync All Users
+```bash
+curl -X POST http://localhost:5000/api/admin/sync-all-xp \
+  -H "Authorization: Bearer <ADMIN_TOKEN>"
+```
+
+## Testing
+1. User submits a quiz (60%+ to get XP)
+2. Check backend logs for `[submitQuiz] XP awarded`
+3. Leaderboard should update within 10 seconds
+4. User should appear with correct XP and rank
+
+## Result
+✅ XP now syncs properly from database to leaderboard  
+✅ SOTW awards based on accurate XP logs  
+✅ Admin tools to debug and fix any future discrepancies  
+✅ Comprehensive logging for troubleshooting

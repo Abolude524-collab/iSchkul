@@ -1,31 +1,41 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
-import { Footer } from '../components/Footer';
-import { StudentOfTheWeek } from '../components/StudentOfTheWeek';
+import { SOTWConfetti } from '../components/SOTWConfetti';
 import { useAuthStore } from '../services/store';
 import { gamificationAPI } from '../services/api';
 import { BookOpen, MessageSquare, Zap, Award, Users, Brain } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
-  const { user } = useAuthStore();
+  const { user, refreshUserStats } = useAuthStore();
   const navigate = useNavigate();
   const [stats, setStats] = useState({
     totalXp: 0,
     streak: 0,
+    level: 1,
     badges: 0,
-    cardsReviewed: 0,
+    todaysXp: 0,
+    isStreakActive: false,
   });
   const [loading, setLoading] = useState(true);
 
   const fetchUserStats = async () => {
     try {
-      const response = await gamificationAPI.getUserStats();
+      const [activityResponse, streakResponse] = await Promise.all([
+        gamificationAPI.getUserActivity(),
+        gamificationAPI.getStreak().catch(() => ({ data: { currentStreak: 0, isStreakActive: false } }))
+      ]);
+
+      const activityData = activityResponse.data;
+      const streakData = streakResponse.data;
+
       setStats({
-        totalXp: response.data.totalXp,
-        streak: response.data.streak,
-        badges: response.data.badges.length,
-        cardsReviewed: response.data.cardsReviewed || 0,
+        totalXp: activityData.totalXp || 0,
+        streak: activityData.currentStreak || 0,
+        level: activityData.level || 1,
+        badges: activityData.badges?.length || 0,
+        todaysXp: activityData.todaysXp || 0,
+        isStreakActive: streakData.isStreakActive || false,
       });
     } catch (error) {
       console.error('Failed to fetch user stats:', error);
@@ -33,19 +43,11 @@ export const DashboardPage: React.FC = () => {
       setStats({
         totalXp: user?.total_xp || 0,
         streak: user?.current_streak || 0,
+        level: user?.level || 1,
         badges: user?.badges?.length || 0,
-        cardsReviewed: 0,
+        todaysXp: 0,
+        isStreakActive: false,
       });
-    }
-  };
-
-  const awardDailyXP = async () => {
-    try {
-      await gamificationAPI.awardXP('DAILY_STREAK');
-      // Refresh stats after awarding XP
-      await fetchUserStats();
-    } catch (error) {
-      console.error('Failed to award daily XP:', error);
     }
   };
 
@@ -58,12 +60,31 @@ export const DashboardPage: React.FC = () => {
     const initializeDashboard = async () => {
       setLoading(true);
       await fetchUserStats();
-      await awardDailyXP();
       setLoading(false);
     };
 
     initializeDashboard();
+
+    // Set up polling to refresh stats every 30 seconds
+    const interval = setInterval(async () => {
+      await fetchUserStats();
+    }, 30000);
+
+    return () => clearInterval(interval);
   }, [user, navigate]);
+
+  // Also refresh when user XP changes (from other pages)
+  useEffect(() => {
+    if (user?.total_xp) {
+      setStats((prev) => ({
+        ...prev,
+        totalXp: user.total_xp || 0,
+        streak: user.current_streak || 0,
+        level: user.level || 1,
+        badges: user.badges?.length || 0,
+      }));
+    }
+  }, [user?.total_xp, user?.level, user?.current_streak]);
 
   const features = [
     {
@@ -98,7 +119,7 @@ export const DashboardPage: React.FC = () => {
       icon: Zap,
       title: 'Co-Reader',
       description: 'Upload PDFs and get AI insights',
-      route: '/reader',
+      route: '/co-reader',
       color: 'from-yellow-500 to-orange-500',
     },
     {
@@ -117,7 +138,6 @@ export const DashboardPage: React.FC = () => {
         <div className="flex-grow flex items-center justify-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
         </div>
-        <Footer />
       </div>
     );
   }
@@ -125,6 +145,7 @@ export const DashboardPage: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Navbar />
+      <SOTWConfetti />
 
       <div className="flex-grow max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-12">
         {/* Welcome Section */}
@@ -136,8 +157,8 @@ export const DashboardPage: React.FC = () => {
             {new Date().getHours() < 12
               ? '🌅 Good morning! Time to learn something new.'
               : new Date().getHours() < 18
-              ? '☀️ Good afternoon! Keep up the momentum.'
-              : '🌙 Good evening! A great time to study.'}
+                ? '☀️ Good afternoon! Keep up the momentum.'
+                : '🌙 Good evening! A great time to study.'}
           </p>
         </div>
 
@@ -160,13 +181,17 @@ export const DashboardPage: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-600 text-sm font-medium">Streak</p>
-                <p className="text-3xl font-bold text-orange-600 mt-2">{stats.streak} 🔥</p>
+                <p className="text-3xl font-bold text-orange-600 mt-2">
+                  {stats.streak} {stats.isStreakActive ? '🔥' : '💔'}
+                </p>
               </div>
               <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
                 <Award className="text-orange-600" size={24} />
               </div>
             </div>
-            <p className="text-xs text-gray-500 mt-4">Keep it going!</p>
+            <p className="text-xs text-gray-500 mt-4">
+              {stats.isStreakActive ? 'Active streak!' : 'Login daily to maintain streak'}
+            </p>
           </div>
 
           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
@@ -185,21 +210,18 @@ export const DashboardPage: React.FC = () => {
           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-600 text-sm font-medium">Cards Reviewed</p>
-                <p className="text-3xl font-bold text-green-600 mt-2">{stats.cardsReviewed}</p>
+                <p className="text-gray-600 text-sm font-medium">Level</p>
+                <p className="text-3xl font-bold text-green-600 mt-2">{stats.level}</p>
               </div>
               <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                 <BookOpen className="text-green-600" size={24} />
               </div>
             </div>
-            <p className="text-xs text-gray-500 mt-4">This month</p>
+            <p className="text-xs text-gray-500 mt-4">Earn XP to level up</p>
           </div>
         </div>
 
-        {/* Student of the Week */}
-        <div className="mb-12">
-          <StudentOfTheWeek />
-        </div>
+
 
         {/* Features Grid */}
         <div className="mb-12">
@@ -267,7 +289,7 @@ export const DashboardPage: React.FC = () => {
         </div>
       </div>
 
-      <Footer />
+
     </div>
   );
 };

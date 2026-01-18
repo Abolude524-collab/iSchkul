@@ -151,7 +151,7 @@ router.get('/current', async (req, res) => {
       user: {
         name: winner.name || `${winner.firstName || ''} ${winner.lastName || ''}`.trim() || winner.username,
         institution: winner.institution,
-        profilePicture: winner.profilePicture,
+        profilePicture: winner.avatar,
         username: winner.username
       },
       institution: winner.institution || '',
@@ -172,44 +172,37 @@ router.get('/current', async (req, res) => {
 
 // GET /api/sotw/archive
 router.get('/archive', async (req, res) => {
-  const client = new MongoClient(process.env.MONGODB_URI || 'mongodb://localhost:27017/ischkul');
-  await client.connect();
-  const db = client.db('ischkul');
-  const weeklyWinnersCollection = db.collection('weeklyWinners');
-  const usersCollection = db.collection('users');
-
   try {
-    const winners = await weeklyWinnersCollection
-      .find({})
-      .sort({ start_date: -1 })
+    // Use Mongoose for consistent field naming
+    const WeeklyWinner = require('../models/WeeklyWinner');
+    const User = require('../models/User');
+    
+    const winners = await WeeklyWinner.find({})
+      .populate('userId', 'name username institution avatar')
+      .sort({ createdAt: -1 })
       .limit(10)
-      .toArray();
+      .lean();
 
-    const archive = await Promise.all(
-      winners.map(async (winner) => {
-        const user = await usersCollection.findOne(
-          { _id: winner.user_id },
-          { projection: { name: 1, username: 1, institution: 1 } }
-        );
-
-        return {
-          id: winner._id.toString(),
-          name: user?.name || user?.username || 'Unknown',
-          institution: user?.institution || '',
-          start_date: winner.start_date,
-          end_date: winner.end_date,
-          weekly_score: winner.weekly_score,
-          winner_quote: winner.winner_quote || '',
-        };
-      })
-    );
+    const archive = winners.map((winner) => ({
+      id: winner._id.toString(),
+      name: winner.userId?.name || winner.userId?.username || 'Unknown',
+      institution: winner.userId?.institution || '',
+      user: {
+        name: winner.userId?.name || winner.userId?.username || 'Unknown',
+        institution: winner.userId?.institution || '',
+        profilePicture: winner.userId?.avatar || '',
+        username: winner.userId?.username || ''
+      },
+      start_date: winner.startDate,
+      end_date: winner.endDate,
+      weekly_score: winner.weeklyScore,
+      winner_quote: winner.winnerQuote || '',
+    }));
 
     res.json({ success: true, archive });
   } catch (error) {
     console.error('Error:', error);
     res.status(500).json({ error: 'Server error' });
-  } finally {
-    await client.close();
   }
 });
 

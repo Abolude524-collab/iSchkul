@@ -1,23 +1,35 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { LandingPage } from './pages/LandingPage';
-import { AboutPage } from './pages/AboutPage';
-import { PrivacyPage } from './pages/PrivacyPage';
-import { LoginPage } from './pages/LoginPage';
-import { SignupPage } from './pages/SignupPage';
-import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
-import { DashboardPage } from './pages/DashboardPage';
-import { QuizPage } from './pages/QuizPage';
-import { FlashcardPage } from './pages/FlashcardPage';
-import { SharedFlashcardsPage } from './pages/SharedFlashcardsPage';
-import { ChatPage } from './pages/ChatPage';
-import { ReaderPage } from './pages/ReaderPage';
-import { AdminPage } from './pages/AdminPage';
-import { LeaderboardPage } from './pages/LeaderboardPage';
-import { CalculatorPage } from './pages/CalculatorPage';
+import { PageLoader } from './components/PageLoader';
 import { useAuthStore } from './services/store';
 
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+// Lazy load pages for better performance
+const LandingPage = React.lazy(() => import('./pages/LandingPage').then(module => ({ default: module.LandingPage })));
+const AboutPage = React.lazy(() => import('./pages/AboutPage').then(module => ({ default: module.AboutPage })));
+const PrivacyPage = React.lazy(() => import('./pages/PrivacyPage').then(module => ({ default: module.PrivacyPage })));
+const LoginPage = React.lazy(() => import('./pages/LoginPage').then(module => ({ default: module.LoginPage })));
+const SignupPage = React.lazy(() => import('./pages/SignupPage').then(module => ({ default: module.SignupPage })));
+const ForgotPasswordPage = React.lazy(() => import('./pages/ForgotPasswordPage').then(module => ({ default: module.ForgotPasswordPage })));
+const DashboardPage = React.lazy(() => import('./pages/DashboardPage').then(module => ({ default: module.DashboardPage })));
+const QuizPage = React.lazy(() => import('./pages/QuizPage').then(module => ({ default: module.QuizPage })));
+const PublicQuizPage = React.lazy(() => import('./pages/PublicQuizPage').then(module => ({ default: module.PublicQuizPage })));
+const FlashcardPage = React.lazy(() => import('./pages/FlashcardPage').then(module => ({ default: module.FlashcardPage })));
+const SharedFlashcardsPage = React.lazy(() => import('./pages/SharedFlashcardsPage').then(module => ({ default: module.SharedFlashcardsPage })));
+const ChatPage = React.lazy(() => import('./pages/ChatPage').then(module => ({ default: module.ChatPage })));
+const ReaderPage = React.lazy(() => import('./pages/ReaderPage').then(module => ({ default: module.ReaderPage })));
+const CoReaderPage = React.lazy(() => import('./pages/CoReaderPage').then(module => ({ default: module.CoReaderPage })));
+const CoReaderLibraryPage = React.lazy(() => import('./pages/CoReaderLibraryPage').then(module => ({ default: module.CoReaderLibraryPage })));
+const AdminPage = React.lazy(() => import('./pages/AdminPage').then(module => ({ default: module.AdminPage })));
+const LeaderboardPage = React.lazy(() => import('./pages/LeaderboardPage').then(module => ({ default: module.LeaderboardPage })));
+const CalculatorPage = React.lazy(() => import('./pages/CalculatorPage').then(module => ({ default: module.CalculatorPage })));
+const NotificationPage = React.lazy(() => import('./pages/NotificationPage').then(module => ({ default: module.NotificationPage })));
+const ProfilePage = React.lazy(() => import('./pages/ProfilePage').then(module => ({ default: module.ProfilePage })));
+const SettingsPage = React.lazy(() => import('./pages/SettingsPage').then(module => ({ default: module.SettingsPage })));
+const XpHistoryPage = React.lazy(() => import('./pages/XpHistoryPage').then(module => ({ default: module.XpHistoryPage })));
+
+import { AppEntryAward } from './components/AppEntryAward';
+
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user } = useAuthStore();
   return user ? <>{children}</> : <Navigate to="/login" replace />;
 };
@@ -25,87 +37,139 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 function App() {
   return (
     <Router>
-      <Routes>
-        {/* Public Routes */}
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/about" element={<AboutPage />} />
-        <Route path="/privacy" element={<PrivacyPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/signup" element={<SignupPage />} />
-        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <AppEntryAward />
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          {/* Public Routes */}
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/about" element={<AboutPage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignupPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
-        {/* Protected Routes */}
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <DashboardPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/quiz"
-          element={
-            <ProtectedRoute>
-              <QuizPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/flashcards"
-          element={
-            <ProtectedRoute>
-              <FlashcardPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/leaderboard"
-          element={
-            <ProtectedRoute>
-              <LeaderboardPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/calculator"
-          element={
-            <ProtectedRoute>
-              <CalculatorPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/chat"
-          element={
-            <ProtectedRoute>
-              <ChatPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/reader"
-          element={
-            <ProtectedRoute>
-              <ReaderPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin"
-          element={
-            <ProtectedRoute>
-              <AdminPage />
-            </ProtectedRoute>
-          }
-        />
+          {/* Protected Routes */}
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/quiz"
+            element={
+              <ProtectedRoute>
+                <QuizPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/flashcards"
+            element={
+              <ProtectedRoute>
+                <FlashcardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/leaderboard"
+            element={
+              <ProtectedRoute>
+                <LeaderboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/calculator"
+            element={
+              <ProtectedRoute>
+                <CalculatorPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/chat"
+            element={
+              <ProtectedRoute>
+                <ChatPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/notification"
+            element={
+              <ProtectedRoute>
+                <NotificationPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/reader"
+            element={
+              <ProtectedRoute>
+                <ReaderPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/co-reader"
+            element={
+              <ProtectedRoute>
+                <CoReaderLibraryPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/co-reader/:id"
+            element={
+              <ProtectedRoute>
+                <CoReaderPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute>
+                <AdminPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <ProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <SettingsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/xp-history"
+            element={
+              <ProtectedRoute>
+                <XpHistoryPage />
+              </ProtectedRoute>
+            }
+          />
 
-        {/* Public Routes (no auth required) */}
-        <Route path="/shared-flashcards/:shareCode" element={<SharedFlashcardsPage />} />
+          {/* Public Routes (no auth required) */}
+          <Route path="/shared-flashcards/:shareCode" element={<SharedFlashcardsPage />} />
+          <Route path="/quiz/:id" element={<PublicQuizPage />} />
 
-        {/* Catch all - redirect to home */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          {/* Catch all - redirect to home */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </Router>
   );
 }

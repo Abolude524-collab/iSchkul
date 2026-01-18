@@ -53,6 +53,18 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  chatAbout: {
+    type: String,
+    default: ''
+  },
+  chatAvatar: {
+    type: String,
+    default: ''
+  },
+  phoneNumber: {
+    type: String,
+    default: ''
+  },
   xp: {
     type: Number,
     default: 0
@@ -60,6 +72,34 @@ const userSchema = new mongoose.Schema({
   level: {
     type: Number,
     default: 1
+  },
+  // Gamification fields (matching student-web-app)
+  total_xp: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  last_active_date: {
+    type: Date,
+    default: null
+  },
+  current_streak: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  is_leaderboard_visible: {
+    type: Boolean,
+    default: false
+  },
+  badges: {
+    type: [String],
+    default: []
+  },
+  sotw_win_count: {
+    type: Number,
+    default: 0,
+    min: 0
   },
   createdAt: {
     type: Date,
@@ -72,7 +112,7 @@ const userSchema = new mongoose.Schema({
 });
 
 // Hash password before saving
-userSchema.pre('save', async function(next) {
+userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
 
   try {
@@ -85,7 +125,7 @@ userSchema.pre('save', async function(next) {
 });
 
 // Compare password method
-userSchema.methods.comparePassword = async function(candidatePassword) {
+userSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
 

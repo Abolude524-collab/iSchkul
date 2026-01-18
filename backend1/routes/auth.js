@@ -30,6 +30,7 @@ router.post('/register', async (req, res) => {
     await user.save();
 
     // Generate token
+    console.log('JWT_SECRET length:', process.env.JWT_SECRET?.length);
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
     res.status(201).json({
@@ -56,6 +57,15 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
+    
+    // Validate input
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+    
+    if (typeof email !== 'string') {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
 
     // Find user by email or username
     const user = await User.findOne({ 
@@ -103,24 +113,64 @@ router.post('/login', async (req, res) => {
 // Get current user
 router.get('/me', auth, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select('-password');
+    const userId = req.user._id || req.user.id;
+    const user = await User.findById(userId).select('-password');
     res.json({ user });
   } catch (error) {
-    res.status(500).json({ error: 'Server error' });
+    console.error('Get me error:', error);
+    res.status(500).json({ error: 'Server error', details: error.message });
   }
 });
 
 // Update profile
 router.put('/profile', auth, async (req, res) => {
   try {
-    const { name, avatar } = req.body;
+    const userId = req.user._id || req.user.id;
+    const { name, avatar, username, phonenumber, studentcategory, institution } = req.body;
+    
+    const updateData = {};
+    if (name) updateData.name = name;
+    if (avatar) updateData.avatar = avatar;
+    if (username) updateData.username = username;
+    if (phonenumber) updateData.phoneNumber = phonenumber;
+    if (studentcategory) updateData.studentCategory = studentcategory;
+    if (institution) updateData.institution = institution;
+
     const user = await User.findByIdAndUpdate(
-      req.user._id,
-      { name, avatar },
+      userId,
+      updateData,
       { new: true }
     ).select('-password');
     res.json({ user });
   } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({ error: 'Server error', details: error.message });
+  }
+});
+
+// Upload avatar
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });
+const storageService = require('../services/storageService');
+
+router.post('/avatar', auth, upload.single('avatar'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const userId = req.user._id || req.user.id;
+    const fileUrl = await storageService.uploadFile(req.file);
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { avatar: fileUrl },
+      { new: true }
+    ).select('-password');
+
+    res.json({ user, avatarUrl: fileUrl });
+  } catch (error) {
+    console.error('Avatar upload error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });

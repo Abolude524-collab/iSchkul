@@ -3,8 +3,25 @@
 @tailwind utilities;
 
 /* Custom styles */
+:root {
+  --bg-color: #f8fafc;
+  --text-color: #0f172a;
+  --card-bg: #ffffff;
+  --border-color: #e2e8f0;
+}
+
+[data-theme="dark"] {
+  --bg-color: #0b1221;
+  --text-color: #e2e8f0;
+  --card-bg: #111827;
+  --border-color: #1f2937;
+}
+
 body {
   @apply font-sans antialiased;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  transition: background-color 150ms ease, color 150ms ease;
 }
 
 .container {
@@ -35,14 +52,54 @@ h2 {
 
 .btn-outline {
   @apply btn border border-gray-300 text-gray-700 hover:bg-gray-50;
+  color: var(--text-color);
+  border-color: var(--border-color);
+  background-color: transparent;
 }
 
 /* Card component */
 .card {
   @apply bg-white rounded-lg shadow-md p-4 md:p-6;
+  background-color: var(--card-bg);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
 }
 
 /* Responsive grid */
 .grid-responsive {
   @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6;
+}
+
+/* 3D Flashcard Utilities */
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+
+.backface-hidden {
+  backface-visibility: hidden;
+}
+
+.rotate-y-180 {
+  transform: rotateY(180deg);
+}
+
+.rotate-x-180 {
+  transform: rotateX(180deg);
+}
+
+/* Glassmorphism */
+.glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.dark .glass {
+  background: rgba(17, 24, 39, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }

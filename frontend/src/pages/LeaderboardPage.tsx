@@ -21,7 +21,7 @@ interface GlobalLeaderboard {
   description: string;
   startDate: string;
   endDate: string;
-  prizes: string[];
+  prizes: Array<{ rank: number; description: string } | string>;
   rankings: LeaderboardEntry[];
 }
 
@@ -61,8 +61,8 @@ export const LeaderboardPage: React.FC = () => {
       setGlobalLeaderboard(globalRes.data.leaderboard);
 
       // Check if user is participating in global leaderboard
-      if (globalRes.data.leaderboard) {
-        setIsParticipating(globalRes.data.leaderboard.rankings.some((r: LeaderboardEntry) => r.userId === user?.id));
+      if (globalRes.data.leaderboard && globalRes.data.leaderboard.rankings) {
+        setIsParticipating(globalRes.data.leaderboard.rankings.some((r: LeaderboardEntry) => r.id === user?.id));
       }
 
     } catch (err: any) {
@@ -170,7 +170,7 @@ export const LeaderboardPage: React.FC = () => {
                     </div>
                     <div className="flex items-center gap-1">
                       <Users size={16} />
-                      <span>{globalLeaderboard.rankings.length} participants</span>
+                      <span>{globalLeaderboard.rankings?.length || 0} participants</span>
                     </div>
                   </div>
                 </div>
@@ -179,9 +179,12 @@ export const LeaderboardPage: React.FC = () => {
                     <div className="mb-4">
                       <h3 className="font-semibold mb-2">Prizes:</h3>
                       <ul className="text-sm space-y-1">
-                        {globalLeaderboard.prizes.slice(0, 3).map((prize, idx) => (
-                          <li key={idx}>🏆 {prize}</li>
-                        ))}
+                        {globalLeaderboard.prizes.slice(0, 3).map((prize, idx) => {
+                          const key = typeof prize === 'string' ? `prize-${idx}-${prize}` : `prize-${prize.rank}-${idx}`;
+                          return (
+                            <li key={key}>🏆 {typeof prize === 'string' ? prize : prize.description}</li>
+                          );
+                        })}
                       </ul>
                     </div>
                   )}
@@ -210,8 +213,8 @@ export const LeaderboardPage: React.FC = () => {
                 <h3 className="text-xl font-bold text-gray-900">Current Rankings</h3>
               </div>
               <div className="divide-y divide-gray-200">
-                {globalLeaderboard.rankings.slice(0, 10).map((entry) => (
-                  <div key={entry.userId} className={`p-4 flex items-center gap-4 ${entry.userId === user?.id ? 'bg-blue-50' : ''}`}>
+              {globalLeaderboard.rankings?.slice(0, 10).map((entry, idx) => (
+                <div key={`global-${entry.id}-${idx}`} className={`p-4 flex items-center gap-4 ${entry.id === user?.id ? 'bg-blue-50' : ''}`}>
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center ${getRankBadgeColor(entry.rank)}`}>
                       {getRankIcon(entry.rank)}
                     </div>
@@ -219,7 +222,7 @@ export const LeaderboardPage: React.FC = () => {
                       <p className="font-semibold text-gray-900">{entry.name}</p>
                       <p className="text-sm text-gray-500">{entry.total_xp} XP earned</p>
                     </div>
-                    {entry.userId === user?.id && (
+                    {entry.id === user?.id && (
                       <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-full">
                         You
                       </span>
@@ -270,8 +273,8 @@ export const LeaderboardPage: React.FC = () => {
               </div>
             </div>
             <div className="divide-y divide-gray-200">
-              {leaderboard.slice(0, 20).map((entry) => (
-                <div key={entry.id} className={`p-4 flex items-center gap-4 ${entry.id === user?.id ? 'bg-blue-50' : ''}`}>
+              {leaderboard.slice(0, 20).map((entry, idx) => (
+                <div key={`alltime-${entry.id}-${idx}`} className={`p-4 flex items-center gap-4 ${entry.id === user?.id ? 'bg-blue-50' : ''}`}>
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center ${getRankBadgeColor(entry.rank)}`}>
                     {getRankIcon(entry.rank)}
                   </div>
@@ -307,8 +310,8 @@ export const LeaderboardPage: React.FC = () => {
                   <p className="text-gray-600 mt-1">XP earned during the competition period</p>
                 </div>
                 <div className="divide-y divide-gray-200">
-                  {globalLeaderboard.rankings.map((entry) => (
-                    <div key={entry.userId} className={`p-4 flex items-center gap-4 ${entry.userId === user?.id ? 'bg-blue-50' : ''}`}>
+                  {globalLeaderboard.rankings?.map((entry, idx) => (
+                    <div key={`comp-${entry.id}-${idx}`} className={`p-4 flex items-center gap-4 ${entry.id === user?.id ? 'bg-blue-50' : ''}`}>
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center ${getRankBadgeColor(entry.rank)}`}>
                         {getRankIcon(entry.rank)}
                       </div>
@@ -316,7 +319,7 @@ export const LeaderboardPage: React.FC = () => {
                         <p className="font-semibold text-gray-900">{entry.name}</p>
                         <p className="text-sm text-gray-500">{entry.total_xp} XP earned</p>
                       </div>
-                      {entry.userId === user?.id && (
+                      {entry.id === user?.id && (
                         <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-full">
                           You
                         </span>

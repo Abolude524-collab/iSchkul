@@ -1,6 +1,7 @@
 import axios from 'axios'
+import { useAuthStore } from './store'
 
-const API_BASE_URL = '/api'
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -18,10 +19,34 @@ apiClient.interceptors.request.use((config) => {
   return config
 })
 
+// Handle responses and redirect on auth errors
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error.response?.status;
+    const data = error.response?.data;
+
+    if (status === 401) {
+      // Token is invalid or expired, clear auth data and redirect to login
+      localStorage.removeItem('authToken')
+      localStorage.removeItem('user')
+      useAuthStore.getState().setUser(null)
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login'
+      }
+    } else {
+      // Log other errors for debugging
+      console.error(`[API Error] ${status || 'Network'}:`, data?.error || error.message);
+    }
+
+    return Promise.reject(error)
+  }
+)
+
 // Auth endpoints
 export const authAPI = {
   login: (email: string, password: string) =>
-    apiClient.post('/auth/login', { email, password }),
+    apiClient.post('/api/auth/login', { email, password }),
   logout: () => {
     localStorage.removeItem('authToken')
   },
@@ -30,135 +55,184 @@ export const authAPI = {
 // Chat endpoints
 export const chatAPI = {
   sendMessage: (userId: string, content: string, groupId?: string) =>
-    apiClient.post('/chat/send', { userId, content, groupId }),
+    apiClient.post('/api/chat/send', { userId, content, groupId }),
   getMessages: (groupId?: string, limit: number = 50) =>
-    apiClient.get('/chat/messages', { params: { groupId, limit } }),
+    apiClient.get('/api/chat/messages', { params: { groupId, limit } }),
 }
 
 // Quiz endpoints
 export const quizAPI = {
   generateQuiz: (text: string, numQuestions: number, createdBy: string, groupId?: string) =>
-    apiClient.post('/generate/quiz', { text, numQuestions, createdBy, groupId }),
+    apiClient.post('/api/generate/quiz', { text, numQuestions, createdBy, groupId }),
   getQuiz: (quizId: string) =>
-    apiClient.get(`/quiz/${quizId}`),
+    apiClient.get(`/api/quiz/${quizId}`),
   submitQuiz: (quizId: string, answers: any[], userId: string) =>
-    apiClient.post(`/quiz/${quizId}/submit`, { answers, userId }),
+    apiClient.post(`/api/quiz/${quizId}/submit`, { answers, userId }),
 }
 
 // Group endpoints
 export const groupAPI = {
-  createGroup: (name: string, description: string, adminUserId: string) =>
-    apiClient.post('/groups/create', { name, description, adminUserId }),
-  getGroups: () =>
-    apiClient.get('/groups'),
+  // Group CRUD
+  createGroup: (data: { name: string; description?: string; category?: string; isPrivate?: boolean; tags?: string[] }) =>
+    apiClient.post('/api/groups/create', data),
+  getGroups: (params?: { category?: string; role?: string; limit?: number; skip?: number }) =>
+    apiClient.get('/api/groups', { params }),
   getGroup: (groupId: string) =>
-    apiClient.get(`/groups/${groupId}`),
-}
+    apiClient.get(`/api/groups/${groupId}`),
+  updateGroup: (groupId: string, data: any) =>
+    apiClient.put(`/api/groups/${groupId}`, data),
+  deleteGroup: (groupId: string) =>
+    apiClient.delete(`/api/groups/${groupId}`),
+
+  // Invite links
+  generateInviteLink: (groupId: string, data?: { expiresInDays?: number; maxUses?: number }) =>
+    apiClient.post(`/api/groups/${groupId}/invite-link`, data),
+  revokeInviteLink: (groupId: string) =>
+    apiClient.delete(`/api/groups/${groupId}/invite-link`),
+  joinGroup: (inviteCode: string) =>
+    apiClient.post(`/api/groups/join/${inviteCode}`),
+
+  // Member management
+  addMember: (groupId: string, data: { userId: string; role?: string }) =>
+    apiClient.post(`/api/groups/${groupId}/members`, data),
+  updateMemberRole: (groupId: string, userId: string, data: { role: string }) =>
+    apiClient.put(`/api/groups/${groupId}/members/${userId}`, data),
+  removeMember: (groupId: string, userId: string) =>
+    apiClient.delete(`/api/groups/${groupId}/members/${userId}`),
+  leaveGroup: (groupId: string) =>
+    apiClient.post(`/api/groups/${groupId}/leave`),
+
+  // Messages
+  getGroupMessages: (groupId: string, params?: { limit?: number; before?: string }) =>
+    apiClient.get(`/api/groups/${groupId}/messages`, { params }),
+  sendGroupMessage: (groupId: string, data: { content: string; messageType?: string; attachments?: any[]; replyTo?: string }) =>
+    apiClient.post(`/api/groups/${groupId}/messages`, data),
+};
 
 // Personal chat endpoints
 export const personalChatAPI = {
   createChat: (contactId: string) =>
-    apiClient.post('/personal-chat/create', { contactId }),
+    apiClient.post('/api/personal-chat/create', { contactId }),
   listChats: () =>
-    apiClient.get('/personal-chat/list'),
+    apiClient.get('/api/personal-chat/list'),
   getChatMessages: (chatId: string) =>
-    apiClient.get(`/personal-chat/messages/${chatId}`),
+    apiClient.get(`/api/personal-chat/messages/${chatId}`),
   sendMessage: (chatId: string, content: string, messageType?: string) =>
-    apiClient.post(`/personal-chat/send/${chatId}`, { content, messageType }),
+    apiClient.post(`/api/personal-chat/send/${chatId}`, { content, messageType }),
 }
 
 // Gamification endpoints
 export const gamificationAPI = {
   awardXP: (activityType: string) =>
-    apiClient.post('/gamification/award', { activity_type: activityType }),
+    apiClient.post('/api/gamification/award', { activity_type: activityType }),
   getUserStats: () =>
-    apiClient.get('/gamification/activity'),
+    apiClient.get('/api/gamification/activity'),
   userEnter: () =>
-    apiClient.post('/gamification/enter'),
+    apiClient.post('/api/gamification/enter'),
   getLeaderboard: () =>
-    apiClient.get('/gamification/leaderboard'),
+    apiClient.get('/api/gamification/leaderboard'),
   getXpHistory: () =>
-    apiClient.get('/gamification/history'),
+    apiClient.get('/api/gamification/history'),
   getUserActivity: () =>
-    apiClient.get('/gamification/activity'),
+    apiClient.get('/api/gamification/activity'),
   joinLeaderboard: () =>
-    apiClient.post('/gamification/join-leaderboard'),
+    apiClient.post('/api/gamification/join-leaderboard'),
   leaveLeaderboard: () =>
-    apiClient.post('/gamification/leave-leaderboard'),
+    apiClient.post('/api/gamification/leave-leaderboard'),
   getUserBadges: () =>
-    apiClient.get('/gamification/badges'),
+    apiClient.get('/api/gamification/badges'),
   getUserAwards: () =>
-    apiClient.get('/gamification/awards'),
+    apiClient.get('/api/gamification/awards'),
+  getStreak: () =>
+    apiClient.get('/api/gamification/streak'),
 }
 
 // Leaderboard management endpoints
 export const leaderboardAPI = {
   createLeaderboard: (data: { title: string; description?: string; durationDays: number; prizes?: string[]; isRestricted?: boolean; allowedUsers?: string[] }) =>
-    apiClient.post('/leaderboard/create', data),
+    apiClient.post('/api/leaderboard/create', data),
   listLeaderboards: () =>
-    apiClient.get('/leaderboard/list'),
+    apiClient.get('/api/leaderboard/list'),
   getActiveLeaderboard: () =>
-    apiClient.get('/leaderboard/active'),
+    apiClient.get('/api/leaderboard/active'),
   joinLeaderboard: (leaderboardId: string) =>
-    apiClient.post('/leaderboard/join', { leaderboardId }),
+    apiClient.post('/api/leaderboard/join', { leaderboardId }),
   leaveLeaderboard: (leaderboardId: string) =>
-    apiClient.post('/leaderboard/leave', { leaderboardId }),
+    apiClient.post('/api/leaderboard/leave', { leaderboardId }),
   endLeaderboard: (leaderboardId: string) =>
-    apiClient.post('/leaderboard/end', { leaderboardId }),
+    apiClient.post('/api/leaderboard/end', { leaderboardId }),
   getLeaderboardParticipants: (leaderboardId: string) =>
-    apiClient.get('/leaderboard/participants', { params: { leaderboardId } }),
+    apiClient.get('/api/leaderboard/participants', { params: { leaderboardId } }),
 }
 
 // Student of the Week endpoints
 export const sotwAPI = {
   getCurrent: () =>
-    apiClient.get('/sotw/current'),
+    apiClient.get('/api/sotw/current'),
   getArchive: () =>
-    apiClient.get('/sotw/archive'),
+    apiClient.get('/api/sotw/archive'),
   submitQuote: (quote: string) =>
-    apiClient.post('/sotw/quote', { quote }),
+    apiClient.post('/api/sotw/quote', { quote }),
 }
 
 // Flashcard sets endpoints
 export const flashcardSetsAPI = {
   createSet: (data: { title: string; description?: string; subject?: string; isPublic?: boolean; tags?: string[] }) =>
-    apiClient.post('/flashcard-sets/create', data),
+    apiClient.post('/api/flashcard-sets/create', data),
   getUserSets: () =>
-    apiClient.get('/flashcard-sets/list'),
+    apiClient.get('/api/flashcard-sets/list'),
   getPublicSet: (shareCode: string) =>
-    apiClient.get('/flashcard-sets/public', { params: { shareCode } }),
+    apiClient.get('/api/flashcard-sets/public', { params: { shareCode } }),
   updateSet: (data: { setId: string; title?: string; description?: string; subject?: string; isPublic?: boolean; tags?: string[] }) =>
-    apiClient.put('/flashcard-sets/update', data),
+    apiClient.put('/api/flashcard-sets/update', data),
   deleteSet: (setId: string) =>
-    apiClient.delete('/flashcard-sets', { params: { setId } }),
+    apiClient.delete('/api/flashcard-sets', { params: { setId } }),
   addCardsToSet: (data: { setId: string; cards: Array<{ front: string; back: string; tags?: string[]; difficulty?: string }> }) =>
-    apiClient.post('/flashcard-sets/add-cards', data),
+    apiClient.post('/api/flashcard-sets/add-cards', data),
   getShareLink: (setId: string) =>
-    apiClient.get('/flashcard-sets/share-link', { params: { setId } }),
+    apiClient.get('/api/flashcard-sets/share-link', { params: { setId } }),
 }
 
 // Users endpoints
 export const usersAPI = {
   searchUsers: (query: string) =>
-    apiClient.get('/users/search', { params: { q: query } }),
+    apiClient.get('/api/users/search', { params: { q: query } }),
   getUser: (userId: string) =>
-    apiClient.get(`/users/${userId}`),
+    apiClient.get(`/api/users/${userId}`),
+  getUserBadges: (userId: string) =>
+    apiClient.get(`/api/users/${userId}/badges`),
+  getMyBadges: () =>
+    apiClient.get('/api/users/badges/my'),
 }
 
 // Flashcard endpoints
 export const flashcardAPI = {
   getDueCards: (limit?: number, setId?: string) =>
-    apiClient.get('/flashcards/due', { params: { limit, groupId: setId } }),
+    apiClient.get('/api/flashcards/due', { params: { limit, groupId: setId } }),
   recordReview: (flashcardId: string, quality: number) =>
-    apiClient.post('/flashcards/review', { flashcardId, quality }),
+    apiClient.post('/api/flashcards/review', { flashcardId, quality }),
   getStats: () =>
-    apiClient.get('/flashcards/stats'),
+    apiClient.get('/api/flashcards/stats'),
   createCard: (data: { front: string; back: string; tags?: string[]; difficulty?: string; setId?: string }) =>
-    apiClient.post('/flashcards/create', data),
-  generateCards: (data: { text?: string; numCards?: number; setId?: string; file?: any }) =>
-    apiClient.post('/flashcards/generate', data),
+    apiClient.post('/api/flashcards/create', data),
+  generateCards: (data: { text?: string; numCards?: number; setId?: string; subject?: string; file?: File | null }) => {
+    const formData = new FormData();
+    if (data.text) formData.append('text', data.text);
+    if (data.numCards) formData.append('numCards', String(data.numCards));
+    if (data.setId) formData.append('setId', data.setId);
+    if (data.subject) formData.append('subject', data.subject);
+    if (data.file) formData.append('file', data.file);
+
+    return apiClient.post('/api/flashcards/generate', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
   getUserCards: (limit?: number, setId?: string) =>
-    apiClient.get('/flashcards', { params: { limit, groupId: setId } }),
+    apiClient.get('/api/flashcards', { params: { limit, groupId: setId } }),
+  exportSetPdf: (setId: string) =>
+    apiClient.get(`/api/flashcards/${setId}/export/pdf`, { responseType: 'blob' }),
+  downloadCard: (setId: string, cardId: string) =>
+    apiClient.get(`/api/flashcards/${setId}/cards/${cardId}/download`, { responseType: 'blob' }),
 }
 
 export default apiClient

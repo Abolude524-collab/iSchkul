@@ -1,7 +1,9 @@
 import React from 'react';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
-import { Award, Target, Users, Lightbulb } from 'lucide-react';
+import { Award, Target, Users, Lightbulb, Facebook, Linkedin } from 'lucide-react';
+import TestimonyImg from "../components/images/Testimony.jpg";
+import JeffreyImg from "../components/images/Jeffrey.jpg";
 
 export const AboutPage: React.FC = () => {
   const values = [
@@ -27,11 +29,45 @@ export const AboutPage: React.FC = () => {
     },
   ];
 
-  const team = [
+  const technologies = [
     { name: 'AI Architecture', role: 'Azure OpenAI, GPT-4o' },
     { name: 'Data Management', role: 'Cosmos DB, Azure AI Search' },
     { name: 'Real-Time Features', role: 'Web PubSub, SignalR' },
     { name: 'Infrastructure', role: 'Azure Functions, Static Web Apps' },
+  ];
+
+  const team = [
+    {
+      name: "Edward Godspower",
+      role: "Product Manager",
+      avatar: "https://randomuser.me/api/portraits/med/men/44.jpg",
+      bio: "Loves building scalable web apps.",
+      social: {
+        facebook: "https://www.facebook.com/profile.php?id=61571600835845",
+      },
+    },
+    {
+      name: "Abolude Testimony",
+      role: "Lead Developer",
+      avatar: TestimonyImg,
+      bio: "Passionate about education and technology.",
+      social: {
+        facebook: "https://www.facebook.com/abolude.etestimony",
+        linkedin:
+          "https://www.linkedin.com/in/testimony-abolude-0b261133a?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=android_app",
+      },
+    },
+    {
+      name: "Usman Jeffrey",
+      role: "AI and ML Specialist",
+      avatar: JeffreyImg,
+      bio: "AI/ML Engineer, Chief innovator/advisor and Data Specialist.",
+      social: {
+        facebook: "https://www.facebook.com/jeffrey.usman.52",
+        linkedin:
+          "https://www.linkedin.com/in/jeffrey-usman-a0b953352?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=android_app",
+      },
+    },
   ];
 
   return (
@@ -80,7 +116,7 @@ export const AboutPage: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-12 text-center">Built on Modern Tech</h2>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            {team.map((tech, index) => (
+            {technologies.map((tech, index) => (
               <div
                 key={index}
                 className="bg-gradient-to-br from-gray-50 to-white p-8 rounded-xl border border-gray-200 hover:shadow-lg hover:border-blue-300 transition-all"
@@ -113,6 +149,56 @@ export const AboutPage: React.FC = () => {
                 </div>
               );
             })}
+          </div>
+        </div>
+      </section>
+
+      {/* Meet the Team */}
+      <section className="py-16 md:py-24 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-12 text-center">Meet the Team</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {team.map((member, index) => (
+              <div
+                key={index}
+                className="bg-gradient-to-br from-gray-50 to-white p-8 rounded-xl border border-gray-200 hover:shadow-lg hover:border-blue-300 transition-all text-center"
+              >
+                <img
+                  src={member.avatar}
+                  alt={member.name}
+                  className="w-32 h-32 rounded-full object-cover mx-auto mb-4 border-4 border-blue-100"
+                />
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">{member.name}</h3>
+                <p className="text-sm text-blue-600 font-medium mb-3">{member.role}</p>
+                <p className="text-gray-600 text-sm mb-4">{member.bio}</p>
+                {member.social && Object.keys(member.social).length > 0 && (
+                  <div className="flex gap-3 justify-center">
+                    {member.social.facebook && (
+                      <a
+                        href={member.social.facebook}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-700 transition-colors"
+                        title="Facebook Profile"
+                      >
+                        <Facebook size={20} />
+                      </a>
+                    )}
+                    {member.social.linkedin && (
+                      <a
+                        href={member.social.linkedin}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-700 hover:text-blue-800 transition-colors"
+                        title="LinkedIn Profile"
+                      >
+                        <Linkedin size={20} />
+                      </a>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       </section>

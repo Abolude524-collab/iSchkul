@@ -7,6 +7,12 @@ interface User {
   avatarUrl?: string
   isAdmin?: boolean
   role?: string
+  // Gamification fields
+  total_xp?: number
+  current_streak?: number
+  level?: number
+  badges?: string[]
+  last_active_date?: string
 }
 
 interface AuthState {
@@ -17,6 +23,7 @@ interface AuthState {
   login: (email: string, password: string) => Promise<void>
   logout: () => void
   setUser: (user: User | null) => void
+  refreshUserStats: () => Promise<void>
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -56,6 +63,47 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   setUser: (user) => set({ user }),
+
+  refreshUserStats: async () => {
+    try {
+      const token = localStorage.getItem('authToken')
+      if (!token) return
+
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/gamification/activity`, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (!response.ok) return
+
+      const data = await response.json()
+
+      set((state) => {
+        if (!state.user) return state
+        return {
+          user: {
+            ...state.user,
+            total_xp: data.totalXp,
+            level: data.level,
+            current_streak: data.currentStreak,
+            badges: data.badges
+          }
+        }
+      })
+
+      // Also update localStorage
+      set((state) => {
+        if (state.user) {
+          localStorage.setItem('user', JSON.stringify(state.user))
+        }
+        return state
+      })
+    } catch (error) {
+      console.error('Failed to refresh user stats:', error)
+    }
+  },
 }))
 
 // Quiz store
