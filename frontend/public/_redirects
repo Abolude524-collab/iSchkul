@@ -1,0 +1,11 @@
+# SPA fallback - redirect all routes to index.html for client-side routing
+/*    /index.html   200
+
+# API proxy (optional - if deploying frontend separately from backend)
+# /api/*  https://your-backend-url.com/api/:splat  200
+
+# GitHub repository redirect
+/github  https://github.com/your-username/ischkul-azure  301
+
+# Documentation redirects (optional)
+/docs    https://github.com/your-username/ischkul-azure#readme  301
