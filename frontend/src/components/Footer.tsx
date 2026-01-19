@@ -16,7 +16,7 @@ export const Footer: React.FC = () => {
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center font-bold text-white">
                 I
               </div>
-              <span className="text-white font-bold text-lg">iS chkul</span>
+              <span className="text-white font-bold text-lg">iSchkul</span>
             </div>
             <p className="text-sm text-gray-400">
               Innovative learning platform powered by Azure AI and serverless architecture.
