@@ -1,16 +1,82 @@
 const OpenAI = require('openai');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-});
+// Lazy initialization with fetch polyfill
+let openai = null;
+let genAI = null;
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const getOpenAIClient = () => {
+    if (!openai && process.env.OPENAI_API_KEY) {
+        try {
+            openai = new OpenAI({
+                apiKey: process.env.OPENAI_API_KEY.trim(),
+                fetch: globalThis.fetch || (async (...args) => {
+                    // Fallback if fetch is not available
+                    const https = require('https');
+                    const http = require('http');
+                    return new Promise((resolve, reject) => {
+                        const url = new URL(args[0]);
+                        const isHttps = url.protocol === 'https:';
+                        const client = isHttps ? https : http;
+                        
+                        const options = {
+                            hostname: url.hostname,
+                            port: url.port,
+                            path: url.pathname + url.search,
+                            method: args[1]?.method || 'GET',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                ...args[1]?.headers
+                            }
+                        };
+
+                        const req = client.request(options, (res) => {
+                            let data = '';
+                            res.on('data', chunk => data += chunk);
+                            res.on('end', () => {
+                                resolve({
+                                    status: res.statusCode,
+                                    ok: res.statusCode >= 200 && res.statusCode < 300,
+                                    text: () => Promise.resolve(data),
+                                    json: () => Promise.resolve(JSON.parse(data))
+                                });
+                            });
+                        });
+
+                        req.on('error', reject);
+                        if (args[1]?.body) req.write(args[1].body);
+                        req.end();
+                    });
+                })
+            });
+        } catch (error) {
+            console.warn('[openai] ⚠️ Failed to initialize OpenAI client:', error.message);
+            openai = null;
+        }
+    }
+    return openai;
+};
+
+const getGeminiClient = () => {
+    if (!genAI && process.env.GEMINI_API_KEY) {
+        try {
+            genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+        } catch (error) {
+            console.warn('[gemini] ⚠️ Failed to initialize Gemini client:', error.message);
+            genAI = null;
+        }
+    }
+    return genAI;
+};
 
 exports.generateEmbedding = async (text) => {
     try {
         // Try OpenAI first
-        const response = await openai.embeddings.create({
+        const client = getOpenAIClient();
+        if (!client) {
+            throw new Error('OpenAI client not initialized. Check OPENAI_API_KEY.');
+        }
+        const response = await client.embeddings.create({
             model: 'text-embedding-ada-002', // Lower cost, good performance
             input: text.replace(/\n/g, ' '),
         });
@@ -61,7 +127,12 @@ async function generateEmbeddingWithGemini(text) {
 exports.generateChatCompletion = async (messages, options = {}) => {
     try {
         const { stream = false, ...otherOptions } = options;
-        const response = await openai.chat.completions.create({
+        const client = getOpenAIClient();
+        if (!client) {
+            console.warn('[openai] Client not initialized, falling back to Gemini...');
+            return await generateChatCompletionWithGemini(messages, options);
+        }
+        const response = await client.chat.completions.create({
             model: 'gpt-4o',
             messages,
             stream,
