@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { useAuthStore } from '../services/store';
+import { getAPIEndpoint } from '../services/api';
 import { Send, Upload, Loader, MessageSquare } from 'lucide-react';
 
 interface Message {

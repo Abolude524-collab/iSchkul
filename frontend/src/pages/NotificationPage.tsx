@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, Check, CheckCheck, Clock, AlertCircle, Info, X } from 'lucide-react';
 import { useAuthStore } from '../services/store';
+import { getAPIEndpoint } from '../services/api';
 import { io, Socket } from 'socket.io-client';
 
 interface Notification {
