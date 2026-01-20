@@ -1,7 +1,9 @@
 import axios from 'axios'
 import { useAuthStore } from './store'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://ischkul-production.up.railway.app'
+// Use relative /api path to let Netlify proxy to backend via netlify.toml redirect
+// Or use VITE_API_URL for explicit backend URL in development
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -46,7 +48,7 @@ apiClient.interceptors.response.use(
 // Auth endpoints
 export const authAPI = {
   login: (email: string, password: string) =>
-    apiClient.post('/api/auth/login', { email, password }),
+    apiClient.post('/auth/login', { email, password }),
   logout: () => {
     localStorage.removeItem('authToken')
   },
