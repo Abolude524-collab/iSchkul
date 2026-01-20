@@ -146,6 +146,15 @@ initializeWeeklyLeaderboard();
 // Check every hour if we need to rotate the weekly leaderboard
 setInterval(checkAndRotateWeeklyLeaderboard, 60 * 60 * 1000);
 
+// Health check endpoint for Render
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+  });
+});
+
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));

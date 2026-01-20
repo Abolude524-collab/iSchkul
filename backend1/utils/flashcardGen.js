@@ -36,7 +36,7 @@ async function loadOCR() {
 async function extractTextFromPPTX(buffer) {
   const JSZip = await loadPPTXParser();
   const { parseString } = await loadXMLParser();
-  
+
   if (!JSZip || !parseString) {
     throw new Error('PPTX support requires: npm install jszip xml2js');
   }
@@ -45,9 +45,9 @@ async function extractTextFromPPTX(buffer) {
     console.log('[flashcardGen] Loading PPTX with jszip...');
     const zip = new JSZip();
     await zip.loadAsync(buffer);
-    
+
     let allText = [];
-    
+
     // Get all slide files from ppt/slides/ directory
     const slideFiles = [];
     zip.folder('ppt/slides')?.forEach((relativePath, file) => {
@@ -55,16 +55,16 @@ async function extractTextFromPPTX(buffer) {
         slideFiles.push({ path: relativePath, file });
       }
     });
-    
+
     console.log(`[flashcardGen] Found ${slideFiles.length} slides`);
-    
+
     // Sort slides by number to maintain order
     slideFiles.sort((a, b) => {
       const numA = parseInt(a.path.match(/\d+/) || [0]);
       const numB = parseInt(b.path.match(/\d+/) || [0]);
       return numA - numB;
     });
-    
+
     // Extract text from each slide
     for (const { path, file } of slideFiles) {
       try {
@@ -77,15 +77,15 @@ async function extractTextFromPPTX(buffer) {
         console.warn(`[flashcardGen] Error parsing slide ${path}:`, slideErr.message);
       }
     }
-    
+
     const result = allText.join('\n').trim();
     console.log('[flashcardGen] Extracted PPTX text length:', result.length);
-    
+
     if (!result) {
       console.warn('[flashcardGen] PPTX extraction returned empty text');
       return '';
     }
-    
+
     return result;
   } catch (err) {
     console.error('[flashcardGen] PPTX extraction error:', err.message);
@@ -127,17 +127,17 @@ async function extractTextWithOCR(buffer, filename) {
 // Extract text from PDF or DOCX files (Buffer-based)
 async function extractText(buffer, mimeType, filename = '') {
   console.log(`[flashcardGen] extractText called with mimeType: "${mimeType}", filename: "${filename}"`);
-  
+
   // Normalize filename
   const lowerFilename = (filename || '').toLowerCase();
   const lowerMimeType = (mimeType || '').toLowerCase();
-  
+
   // PDF detection
   if (lowerMimeType === 'application/pdf' || lowerFilename.endsWith('.pdf')) {
     console.log('[flashcardGen] Processing as PDF');
     const data = await pdf(buffer);
     let text = data.text;
-    
+
     // Auto-detect scanned PDF (very short text = likely scanned)
     if (text.trim().length < 100) {
       try {
@@ -149,41 +149,41 @@ async function extractText(buffer, mimeType, filename = '') {
     }
     return text;
   }
-  
+
   // PPTX detection (multiple MIME type variations)
-  if (lowerMimeType.includes('presentationml') || 
-      lowerMimeType === 'application/vnd.ms-powerpoint' ||
-      lowerMimeType === 'application/x-pptx' ||
-      lowerFilename.endsWith('.pptx')) {
+  if (lowerMimeType.includes('presentationml') ||
+    lowerMimeType === 'application/vnd.ms-powerpoint' ||
+    lowerMimeType === 'application/x-pptx' ||
+    lowerFilename.endsWith('.pptx')) {
     console.log('[flashcardGen] Processing as PPTX');
     return await extractTextFromPPTX(buffer);
   }
-  
+
   // PPT detection (old PowerPoint format)
   if (lowerMimeType === 'application/vnd.ms-powerpoint' ||
-      lowerMimeType === 'application/x-ppt' ||
-      lowerMimeType === 'application/mspowerpoint' ||
-      lowerFilename.endsWith('.ppt')) {
+    lowerMimeType === 'application/x-ppt' ||
+    lowerMimeType === 'application/mspowerpoint' ||
+    lowerFilename.endsWith('.ppt')) {
     console.log('[flashcardGen] Processing as PPT (old format)');
     throw new Error('PPT (old PowerPoint format) not supported. Please convert to PPTX format. You can convert PPT to PPTX using: Microsoft PowerPoint, Google Slides, LibreOffice Impress, or online converters.');
   }
-  
+
   // DOCX detection
-  if (lowerMimeType.includes('wordprocessingml') || 
-      lowerMimeType === 'application/msword' ||
-      lowerMimeType === 'application/x-docx' ||
-      lowerFilename.endsWith('.docx')) {
+  if (lowerMimeType.includes('wordprocessingml') ||
+    lowerMimeType === 'application/msword' ||
+    lowerMimeType === 'application/x-docx' ||
+    lowerFilename.endsWith('.docx')) {
     console.log('[flashcardGen] Processing as DOCX');
     const result = await mammoth.extractRawText({ buffer });
     return result.value;
   }
-  
+
   // TXT detection
   if (lowerMimeType === 'text/plain' || lowerFilename.endsWith('.txt')) {
     console.log('[flashcardGen] Processing as TXT');
     return buffer.toString('utf-8');
   }
-  
+
   // Image detection
   if (lowerMimeType && lowerMimeType.startsWith('image/')) {
     console.log('[flashcardGen] Processing as image with OCR');
@@ -193,7 +193,7 @@ async function extractText(buffer, mimeType, filename = '') {
       throw new Error('Image OCR failed: ' + ocrErr.message);
     }
   }
-  
+
   // Fallback: try to auto-detect by extension if no MIME type
   if (!mimeType && buffer instanceof Buffer) {
     if (lowerFilename.endsWith('.pptx')) {
@@ -203,7 +203,7 @@ async function extractText(buffer, mimeType, filename = '') {
     console.log('[flashcardGen] No MIME type, treating as text');
     return buffer.toString('utf-8');
   }
-  
+
   // Unsupported format
   console.error(`[flashcardGen] Unsupported format - mimeType: "${mimeType}", filename: "${filename}"`);
   throw new Error(`Unsupported file format "${filename}" (${mimeType}). Supported: PDF, PPTX, DOCX, TXT, and images (with OCR if installed).`);
@@ -231,7 +231,7 @@ ${text}`;
   // Try Gemini first
   try {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
     const result = await model.generateContent(prompt);
     const response = await result.response;

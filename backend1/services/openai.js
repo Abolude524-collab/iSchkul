@@ -70,13 +70,13 @@ exports.generateChatCompletion = async (messages, options = {}) => {
         return response;
     } catch (error) {
         console.error('❌ OpenAI chat completion error:', error.message);
-        
+
         // Fallback to Gemini on quota exceeded or other errors
         if (error.status === 429 || error.code === 'insufficient_quota') {
             console.log('🔄 OpenAI quota exceeded, falling back to Gemini...');
             return await generateChatCompletionWithGemini(messages, options);
         }
-        
+
         throw error;
     }
 };
@@ -86,46 +86,65 @@ exports.generateChatCompletion = async (messages, options = {}) => {
  */
 const generateChatCompletionWithGemini = async (messages, options = {}) => {
     try {
-        const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
-        
+        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
         // Build the conversation history for Gemini
         // Gemini expects a flat list of messages alternating user/model
-        const history = [];
         let systemPrompt = '';
-        
-        for (const msg of messages) {
-            if (msg.role === 'system') {
-                systemPrompt = msg.content;
-            } else if (msg.role === 'user') {
-                history.push({
-                    role: 'user',
-                    parts: [{ text: msg.content }]
-                });
-            } else if (msg.role === 'assistant') {
-                history.push({
-                    role: 'model',
-                    parts: [{ text: msg.content }]
-                });
-            }
-        }
-        
-        // Get the last user message (current query)
-        const lastUserMessage = messages[messages.length - 1];
-        if (!lastUserMessage || lastUserMessage.role !== 'user') {
+
+        // Identify the last user message (current query)
+        const reversed = [...messages].reverse();
+        const lastUserMessage = reversed.find(m => m.role === 'user');
+        if (!lastUserMessage) {
             throw new Error('Last message must be from user');
         }
-        
-        // Combine system prompt with user message if present
+
+        // Build history excluding system messages and excluding the last user message
+        const historyRaw = [];
+        for (const msg of messages) {
+            if (msg === lastUserMessage) continue; // exclude the last user turn from history
+            if (msg.role === 'system') {
+                systemPrompt = msg.content;
+                continue;
+            }
+            if (msg.role === 'user') {
+                historyRaw.push({ role: 'user', parts: [{ text: msg.content }] });
+            } else if (msg.role === 'assistant') {
+                historyRaw.push({ role: 'model', parts: [{ text: msg.content }] });
+            }
+        }
+
+        // Normalize history to start with a user turn and alternate roles
+        const history = [];
+        for (const entry of historyRaw) {
+            const prev = history[history.length - 1];
+            if (!prev) {
+                // First entry: must be user for Gemini
+                if (entry.role === 'user') {
+                    history.push(entry);
+                } else {
+                    // skip leading model messages with no prior user
+                    continue;
+                }
+            } else if (prev.role === entry.role) {
+                // Merge consecutive same-role messages
+                prev.parts[0].text += `\n\n${entry.parts[0].text}`;
+            } else {
+                history.push(entry);
+            }
+        }
+
+        // Combine system prompt with the current user content
         let userContent = lastUserMessage.content;
         if (systemPrompt) {
             userContent = `${systemPrompt}\n\n${userContent}`;
         }
-        
+
         if (options.stream) {
             // For streaming, return an async generator that mimics OpenAI format
             const chat = model.startChat({ history });
             const streamResponse = await chat.sendMessageStream(userContent);
-            
+
             return {
                 async *[Symbol.asyncIterator]() {
                     for await (const chunk of streamResponse.stream) {
@@ -144,10 +163,10 @@ const generateChatCompletionWithGemini = async (messages, options = {}) => {
             const chat = model.startChat({ history });
             const result = await chat.sendMessage(userContent);
             const text = result.response.text();
-            
+
             // Return in OpenAI-compatible format
             return {
-                choices: [{ 
+                choices: [{
                     message: { content: text }
                 }]
             };
