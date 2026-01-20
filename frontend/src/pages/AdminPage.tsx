@@ -153,7 +153,7 @@ export const AdminPage: React.FC = () => {
 
       // Load analytics
       const analyticsResponse = await fetch(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/admin/analytics/overview`,
+        `getAPIEndpoint('/admin/analytics/overview`,
         {
           headers: { Authorization: `Bearer ${token}` }
         }
@@ -166,7 +166,7 @@ export const AdminPage: React.FC = () => {
 
       // Load users
       const usersResponse = await fetch(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/admin/users`,
+        `getAPIEndpoint('/admin/users`,
         {
           headers: { Authorization: `Bearer ${token}` }
         }
@@ -191,7 +191,7 @@ export const AdminPage: React.FC = () => {
 
       // Load sent notifications
       const notificationsResponse = await fetch(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/admin/notifications/sent`,
+        `getAPIEndpoint('/admin/notifications/sent`,
         {
           headers: { Authorization: `Bearer ${token}` }
         }
@@ -214,7 +214,7 @@ export const AdminPage: React.FC = () => {
     try {
       const token = localStorage.getItem('authToken');
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/admin/notifications/send`,
+        `getAPIEndpoint('/admin/notifications/send`,
         {
           method: 'POST',
           headers: {
@@ -241,7 +241,7 @@ export const AdminPage: React.FC = () => {
     try {
       const token = localStorage.getItem('authToken');
       await fetch(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/admin/users/role`,
+        `getAPIEndpoint('/admin/users/role`,
         {
           method: 'PUT',
           headers: {
@@ -261,7 +261,7 @@ export const AdminPage: React.FC = () => {
     try {
       const token = localStorage.getItem('authToken');
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/admin/sync-xp`,
+        `getAPIEndpoint('/admin/sync-xp`,
         {
           method: 'POST',
           headers: {
@@ -290,7 +290,7 @@ export const AdminPage: React.FC = () => {
     try {
       const token = localStorage.getItem('authToken');
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/admin/sync-all-xp`,
+        `getAPIEndpoint('/admin/sync-all-xp`,
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` }
@@ -318,7 +318,7 @@ export const AdminPage: React.FC = () => {
     try {
       const token = localStorage.getItem('authToken');
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/admin/recalculate-sotw`,
+        `getAPIEndpoint('/admin/recalculate-sotw`,
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` }

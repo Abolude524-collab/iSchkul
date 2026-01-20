@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { useAuthStore } from '../services/store';
-import { gamificationAPI } from '../services/api';
+import { gamificationAPI, getAPIEndpoint } from '../services/api';
 import { Loader, AlertCircle, CheckCircle, XCircle, Brain, Calculator, Plus, BookOpen, Trophy, Clock, Edit, Trash2, Play, Share2, History, TrendingUp, BarChart2, ChevronLeft } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { QuizSettingsForm } from '../components/QuizSettingsForm';
@@ -177,7 +177,7 @@ export const QuizPage: React.FC = () => {
       if (generateMode === 'paste') {
         // Generate from pasted text
         response = await fetch(
-          `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/generate/quiz`,
+          `getAPIEndpoint('/generate/quiz`,
           {
             method: 'POST',
             headers: {
@@ -208,7 +208,7 @@ export const QuizPage: React.FC = () => {
         });
 
         response = await fetch(
-          `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/generate/quiz`,
+          `getAPIEndpoint('/generate/quiz`,
           {
             method: 'POST',
             headers: {
@@ -229,7 +229,7 @@ export const QuizPage: React.FC = () => {
       } else {
         // Topic-only submission
         response = await fetch(
-          `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/generate/quiz`,
+          `getAPIEndpoint('/generate/quiz`,
           {
             method: 'POST',
             headers: {
@@ -328,7 +328,7 @@ export const QuizPage: React.FC = () => {
     try {
       const token = localStorage.getItem('authToken');
       const submitResponse = await fetch(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/quizzes/${quiz._id}/submit`,
+        `getAPIEndpoint('/quizzes/${quiz._id}/submit`,
         {
           method: 'POST',
           headers: {
@@ -380,7 +380,7 @@ export const QuizPage: React.FC = () => {
     try {
       const token = localStorage.getItem('authToken');
       const submitResponse = await fetch(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/quizzes/${quiz._id}/submit`,
+        `getAPIEndpoint('/quizzes/${quiz._id}/submit`,
         {
           method: 'POST',
           headers: {
@@ -490,7 +490,7 @@ export const QuizPage: React.FC = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/quizzes`, {
+      const response = await fetch(`getAPIEndpoint('/quizzes`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (response.ok) {
@@ -513,7 +513,7 @@ export const QuizPage: React.FC = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/quizzes/create`, {
+      const response = await fetch(`getAPIEndpoint('/quizzes/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -548,7 +548,7 @@ export const QuizPage: React.FC = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/quizzes/${quiz._id}`, {
+      const response = await fetch(`getAPIEndpoint('/quizzes/${quiz._id}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -596,7 +596,7 @@ export const QuizPage: React.FC = () => {
       console.log('📝 [submitQuiz] Answers:', answers);
       console.log('📝 [submitQuiz] Time spent:', timeSpent);
 
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/quizzes/${selectedQuiz._id}/submit`, {
+      const response = await fetch(`getAPIEndpoint('/quizzes/${selectedQuiz._id}/submit`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -643,7 +643,7 @@ export const QuizPage: React.FC = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/quizzes/${quizId}`, {
+      const response = await fetch(`getAPIEndpoint('/quizzes/${quizId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -707,7 +707,7 @@ export const QuizPage: React.FC = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/quizzes/${selectedQuiz._id}`, {
+      const response = await fetch(`getAPIEndpoint('/quizzes/${selectedQuiz._id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -741,7 +741,7 @@ export const QuizPage: React.FC = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/quizzes/user/history`, {
+      const response = await fetch(`getAPIEndpoint('/quizzes/user/history`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (response.ok) {
@@ -1571,7 +1571,7 @@ export const QuizPage: React.FC = () => {
                                     // If not in current limited list, fetch it
                                     try {
                                       const token = localStorage.getItem('authToken');
-                                      const resp = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/quizzes/${entry.quizId}`, {
+                                      const resp = await fetch(`getAPIEndpoint('/quizzes/${entry.quizId}`, {
                                         headers: { Authorization: `Bearer ${token}` },
                                       });
                                       if (resp.ok) {

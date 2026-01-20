@@ -448,7 +448,7 @@ export const ChatPage: React.FC = () => {
   const fetchChatProfile = async () => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/users/${user?.id}/chat-profile`, {
+      const response = await fetch(`getAPIEndpoint('/users/${user?.id}/chat-profile`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -467,7 +467,7 @@ export const ChatPage: React.FC = () => {
   const fetchContactRequests = async () => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/contact-requests/received`, {
+      const response = await fetch(`getAPIEndpoint('/contact-requests/received`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -485,7 +485,7 @@ export const ChatPage: React.FC = () => {
     try {
       setNotificationsLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/notifications`, {
+      const response = await fetch(`getAPIEndpoint('/notifications`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -504,7 +504,7 @@ export const ChatPage: React.FC = () => {
   const markNotificationAsRead = async (notificationId: string) => {
     try {
       const token = localStorage.getItem('authToken');
-      await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/notifications/${notificationId}/read`, {
+      await fetch(`getAPIEndpoint('/notifications/${notificationId}/read`, {
         method: 'PUT',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -526,7 +526,7 @@ export const ChatPage: React.FC = () => {
   const markAllNotificationsAsRead = async () => {
     try {
       const token = localStorage.getItem('authToken');
-      await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/notifications/read-all`, {
+      await fetch(`getAPIEndpoint('/notifications/read-all`, {
         method: 'PUT',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -548,7 +548,7 @@ export const ChatPage: React.FC = () => {
     }
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/users/search?q=${encodeURIComponent(query)}`, {
+      const response = await fetch(`getAPIEndpoint('/users/search?q=${encodeURIComponent(query)}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -598,7 +598,7 @@ export const ChatPage: React.FC = () => {
       } else if (isAIMode) {
         // Use chat API for AI responses
         response = await fetch(
-          `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/chat/send`,
+          `getAPIEndpoint('/chat/send`,
           {
             method: 'POST',
             headers: {
@@ -893,7 +893,7 @@ export const ChatPage: React.FC = () => {
   const handleSaveChatProfile = async () => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/users/chat-profile`, {
+      const response = await fetch(`getAPIEndpoint('/users/chat-profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -917,7 +917,7 @@ export const ChatPage: React.FC = () => {
   const handleSendConnectRequest = async (recipientId: string) => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/contact-requests/send`, {
+      const response = await fetch(`getAPIEndpoint('/contact-requests/send`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -942,7 +942,7 @@ export const ChatPage: React.FC = () => {
   const handleAcceptRequest = async (requestId: string) => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/contact-requests/${requestId}/accept`, {
+      const response = await fetch(`getAPIEndpoint('/contact-requests/${requestId}/accept`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -977,7 +977,7 @@ export const ChatPage: React.FC = () => {
   const handleRejectRequest = async (requestId: string) => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/contact-requests/${requestId}/reject`, {
+      const response = await fetch(`getAPIEndpoint('/contact-requests/${requestId}/reject`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,

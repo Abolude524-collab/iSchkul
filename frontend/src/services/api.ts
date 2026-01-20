@@ -5,6 +5,12 @@ import { useAuthStore } from './store'
 // Or use VITE_API_URL for explicit backend URL in development
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
 
+// 🔧 Helper function for direct fetch calls
+export const getAPIEndpoint = (path: string): string => {
+  const baseUrl = import.meta.env.VITE_API_URL || '/api'
+  return `${baseUrl}${path.startsWith('/') ? path : '/' + path}`
+}
+
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   headers: {

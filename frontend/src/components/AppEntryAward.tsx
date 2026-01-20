@@ -14,7 +14,7 @@ export const AppEntryAward: React.FC = () => {
 
         // Call the enter endpoint to award daily XP if not already awarded today
         // The backend handles atomic operations to prevent duplicates
-        await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/gamification/enter`, {
+        await fetch(`getAPIEndpoint('/gamification/enter`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
