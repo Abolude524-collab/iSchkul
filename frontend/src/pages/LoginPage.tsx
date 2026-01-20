@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, Loader } from 'lucide-react';
 import { useAuthStore } from '../services/store';
+import { getAPIEndpoint } from '../services/api';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 
@@ -20,7 +21,7 @@ export const LoginPage: React.FC = () => {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch(getAPIEndpoint('/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
