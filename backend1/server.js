@@ -13,7 +13,7 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || "http://localhost:5173",
+    origin: process.env.FRONTEND_URL || "https://ischkuldemo12.netlify.app",
     methods: ["GET", "POST"]
   }
 });
@@ -22,7 +22,10 @@ const io = socketIo(server, {
 app.use(helmet()); // Basic security headers
 app.use(compression()); // Compress responses
 app.use(morgan('dev')); // Logging
-app.use(cors());
+app.use(cors({
+  origin: [process.env.FRONTEND_URL, 'http://localhost:5173', 'http://localhost:3000'],
+  credentials: true
+}));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
