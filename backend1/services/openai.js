@@ -1,7 +1,56 @@
+// 🔧 CRITICAL: Set up global fetch polyfill BEFORE importing OpenAI
+if (!globalThis.fetch) {
+    const http = require('http');
+    const https = require('https');
+    const { URL } = require('url');
+    
+    globalThis.fetch = async (resource, init = {}) => {
+        return new Promise((resolve, reject) => {
+            const url = new URL(resource);
+            const isHttps = url.protocol === 'https:';
+            const client = isHttps ? https : http;
+            
+            const options = {
+                hostname: url.hostname,
+                port: url.port || (isHttps ? 443 : 80),
+                path: url.pathname + url.search,
+                method: init.method || 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'OpenAI-Node.js-Client',
+                    ...init.headers
+                }
+            };
+
+            const req = client.request(options, (res) => {
+                let data = '';
+                res.on('data', chunk => { data += chunk; });
+                res.on('end', () => {
+                    resolve({
+                        status: res.statusCode,
+                        ok: res.statusCode >= 200 && res.statusCode < 300,
+                        headers: new Map(Object.entries(res.headers)),
+                        text: () => Promise.resolve(data),
+                        json: () => Promise.resolve(JSON.parse(data)),
+                        blob: () => Promise.resolve(Buffer.from(data))
+                    });
+                });
+            });
+
+            req.on('error', reject);
+            if (init.body) {
+                req.write(typeof init.body === 'string' ? init.body : JSON.stringify(init.body));
+            }
+            req.end();
+        });
+    };
+}
+
+// NOW safe to import OpenAI (fetch is already available)
 const OpenAI = require('openai');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-// Lazy initialization with fetch polyfill
+// Lazy initialization
 let openai = null;
 let genAI = null;
 
@@ -9,45 +58,7 @@ const getOpenAIClient = () => {
     if (!openai && process.env.OPENAI_API_KEY) {
         try {
             openai = new OpenAI({
-                apiKey: process.env.OPENAI_API_KEY.trim(),
-                fetch: globalThis.fetch || (async (...args) => {
-                    // Fallback if fetch is not available
-                    const https = require('https');
-                    const http = require('http');
-                    return new Promise((resolve, reject) => {
-                        const url = new URL(args[0]);
-                        const isHttps = url.protocol === 'https:';
-                        const client = isHttps ? https : http;
-                        
-                        const options = {
-                            hostname: url.hostname,
-                            port: url.port,
-                            path: url.pathname + url.search,
-                            method: args[1]?.method || 'GET',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                ...args[1]?.headers
-                            }
-                        };
-
-                        const req = client.request(options, (res) => {
-                            let data = '';
-                            res.on('data', chunk => data += chunk);
-                            res.on('end', () => {
-                                resolve({
-                                    status: res.statusCode,
-                                    ok: res.statusCode >= 200 && res.statusCode < 300,
-                                    text: () => Promise.resolve(data),
-                                    json: () => Promise.resolve(JSON.parse(data))
-                                });
-                            });
-                        });
-
-                        req.on('error', reject);
-                        if (args[1]?.body) req.write(args[1].body);
-                        req.end();
-                    });
-                })
+                apiKey: process.env.OPENAI_API_KEY.trim()
             });
         } catch (error) {
             console.warn('[openai] ⚠️ Failed to initialize OpenAI client:', error.message);
