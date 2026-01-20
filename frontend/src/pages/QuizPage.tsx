@@ -328,7 +328,7 @@ export const QuizPage: React.FC = () => {
     try {
       const token = localStorage.getItem('authToken');
       const submitResponse = await fetch(
-        `getAPIEndpoint('/quizzes/${quiz._id}/submit`,
+        getAPIEndpoint(`/quizzes/${quiz._id}/submit`),
         {
           method: 'POST',
           headers: {
@@ -380,7 +380,7 @@ export const QuizPage: React.FC = () => {
     try {
       const token = localStorage.getItem('authToken');
       const submitResponse = await fetch(
-        `getAPIEndpoint('/quizzes/${quiz._id}/submit`,
+        getAPIEndpoint(`/quizzes/${quiz._id}/submit`),
         {
           method: 'POST',
           headers: {
@@ -490,7 +490,7 @@ export const QuizPage: React.FC = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`getAPIEndpoint('/quizzes`, {
+      const response = await fetch(getAPIEndpoint('/quizzes'), {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (response.ok) {
@@ -513,7 +513,7 @@ export const QuizPage: React.FC = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`getAPIEndpoint('/quizzes/create`, {
+      const response = await fetch(getAPIEndpoint('/quizzes/create'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -548,7 +548,7 @@ export const QuizPage: React.FC = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`getAPIEndpoint('/quizzes/${quiz._id}`, {
+      const response = await fetch(getAPIEndpoint(`/quizzes/${quiz._id}`), {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -596,7 +596,7 @@ export const QuizPage: React.FC = () => {
       console.log('📝 [submitQuiz] Answers:', answers);
       console.log('📝 [submitQuiz] Time spent:', timeSpent);
 
-      const response = await fetch(`getAPIEndpoint('/quizzes/${selectedQuiz._id}/submit`, {
+      const response = await fetch(getAPIEndpoint(`/quizzes/${selectedQuiz._id}/submit`), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -643,7 +643,7 @@ export const QuizPage: React.FC = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`getAPIEndpoint('/quizzes/${quizId}`, {
+      const response = await fetch(getAPIEndpoint(`/quizzes/${quizId}`), {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -707,7 +707,7 @@ export const QuizPage: React.FC = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`getAPIEndpoint('/quizzes/${selectedQuiz._id}`, {
+      const response = await fetch(getAPIEndpoint(`/quizzes/${selectedQuiz._id}`), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -741,7 +741,7 @@ export const QuizPage: React.FC = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`getAPIEndpoint('/quizzes/user/history`, {
+      const response = await fetch(getAPIEndpoint(`/quizzes/user/history`), {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (response.ok) {
@@ -1571,7 +1571,7 @@ export const QuizPage: React.FC = () => {
                                     // If not in current limited list, fetch it
                                     try {
                                       const token = localStorage.getItem('authToken');
-                                      const resp = await fetch(`getAPIEndpoint('/quizzes/${entry.quizId}`, {
+                                      const resp = await fetch(getAPIEndpoint(`/quizzes/${entry.quizId}`), {
                                         headers: { Authorization: `Bearer ${token}` },
                                       });
                                       if (resp.ok) {
