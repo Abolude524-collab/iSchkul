@@ -92,9 +92,9 @@ export const XpHistoryPage: React.FC = () => {
   const fetchBadges = async () => {
     try {
       const [badgesRes, activityRes, userBadgesRes] = await Promise.all([
-        api.get('/api/gamification/badges').catch(() => ({ data: { badges: [] } })),
-        api.get('/api/gamification/activity').catch(() => ({ data: { badges: [] } })),
-        api.get('/api/users/badges/my').catch(() => ({ data: { badges: [] } }))
+        api.get('/gamification/badges').catch(() => ({ data: { badges: [] } })),
+        api.get('/gamification/activity').catch(() => ({ data: { badges: [] } })),
+        api.get('/users/badges/my').catch(() => ({ data: { badges: [] } }))
       ]);
 
       const calculatedBadges = badgesRes.data.badges || [];
@@ -129,7 +129,7 @@ export const XpHistoryPage: React.FC = () => {
   const fetchXpHistory = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/api/xp-history', {
+      const response = await api.get('/xp-history', {
         params: { limit: 50, skip: 0 }
       });
 
@@ -146,7 +146,7 @@ export const XpHistoryPage: React.FC = () => {
 
   const fetchXpStats = async () => {
     try {
-      const response = await api.get('/api/xp-history/stats', {
+      const response = await api.get('/xp-history/stats', {
         params: { timeRange }
       });
 

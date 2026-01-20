@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Menu, X, LogOut, Settings, User, Bell, Trophy } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../services/store';
+import { getAPIEndpoint } from '../services/api';
 import { io, Socket } from 'socket.io-client';
 
 export const Navbar: React.FC = () => {
