@@ -1,10 +1,21 @@
 const express = require('express');
 const { MongoClient, ObjectId } = require('mongodb');
 const jwt = require('jsonwebtoken');
-const { customAlphabet } = require('nanoid');
+const crypto = require('crypto');
 
 const router = express.Router();
-const nanoid = customAlphabet("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", 10);
+
+// Custom nanoid replacement using crypto (no external dependencies)
+const generateId = (length = 10) => {
+  const chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+  const bytes = crypto.randomBytes(length);
+  let id = '';
+  for (let i = 0; i < length; i++) {
+    id += chars[bytes[i] % chars.length];
+  }
+  return id;
+};
+const nanoid = () => generateId(10);
 
 // Middleware to verify JWT token
 const auth = (req, res, next) => {

@@ -32,7 +32,9 @@ import {
   Plus,
   Edit,
   Lock,
-  Unlock
+  Unlock,
+  Zap,
+  RefreshCw
 } from 'lucide-react';
 
 interface AnalyticsData {
@@ -90,6 +92,9 @@ export const AdminPage: React.FC = () => {
   const [sentNotifications, setSentNotifications] = useState<SentNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [syncingXp, setSyncingXp] = useState(false);
+  const [recalculatingSotw, setRecalculatingSotw] = useState(false);
+  const [syncMessage, setSyncMessage] = useState('');
 
   // Notification form
   const [notificationForm, setNotificationForm] = useState({
@@ -252,6 +257,89 @@ export const AdminPage: React.FC = () => {
     }
   };
 
+  const syncUserXp = async (userId: string, userName: string) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/admin/sync-xp`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ userId })
+        }
+      );
+
+      if (response.ok) {
+        const result = await response.json();
+        alert(`✓ XP synced for ${userName}: ${result.xp} XP (${result.xpLogsTotal} from logs)`);
+        loadData(true);
+      } else {
+        throw new Error('Failed to sync user XP');
+      }
+    } catch (err: any) {
+      alert(`✗ Error syncing XP: ${err.message}`);
+    }
+  };
+
+  const syncAllXp = async () => {
+    setSyncingXp(true);
+    setSyncMessage('');
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/admin/sync-all-xp`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      );
+
+      if (response.ok) {
+        const result = await response.json();
+        setSyncMessage(`✓ Successfully synced XP for ${result.usersUpdated} users`);
+        setTimeout(() => setSyncMessage(''), 3000);
+        loadData(true);
+      } else {
+        throw new Error('Failed to sync XP');
+      }
+    } catch (err: any) {
+      setSyncMessage(`✗ Error: ${err.message}`);
+    } finally {
+      setSyncingXp(false);
+    }
+  };
+
+  const recalculateSotw = async () => {
+    setRecalculatingSotw(true);
+    setSyncMessage('');
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/admin/recalculate-sotw`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      );
+
+      if (response.ok) {
+        const result = await response.json();
+        setSyncMessage(`✓ Successfully recalculated SOTW. Winner: ${result.winner?.name || 'None'}`);
+        setTimeout(() => setSyncMessage(''), 3000);
+        loadData(true);
+      } else {
+        throw new Error('Failed to recalculate SOTW');
+      }
+    } catch (err: any) {
+      setSyncMessage(`✗ Error: ${err.message}`);
+    } finally {
+      setRecalculatingSotw(false);
+    }
+  };
+
   const createLeaderboard = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -371,7 +459,7 @@ export const AdminPage: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Navigation Tabs */}
           <div className="mb-8">
-            <nav className="flex space-x-8">
+            <nav className="flex space-x-8 overflow-x-auto">
               {[
                 { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
                 { id: 'users', label: 'User Management', icon: Users },
@@ -382,7 +470,7 @@ export const AdminPage: React.FC = () => {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
                     activeTab === tab.id
                       ? 'bg-blue-100 text-blue-700 border-b-2 border-blue-600'
                       : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
@@ -519,7 +607,7 @@ export const AdminPage: React.FC = () => {
                             {new Date(user.createdAt).toLocaleDateString()}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <div className="flex gap-2">
+                            <div className="flex gap-2 flex-wrap">
                               {user.role !== 'superadmin' && (
                                 <>
                                   {user.role === 'user' ? (
@@ -541,6 +629,14 @@ export const AdminPage: React.FC = () => {
                                   )}
                                 </>
                               )}
+                              <button
+                                onClick={() => syncUserXp(user._id, user.name || user.username)}
+                                className="text-green-600 hover:text-green-900 flex items-center gap-1"
+                                title="Sync XP from activity logs"
+                              >
+                                <RefreshCw className="h-4 w-4" />
+                                Sync XP
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -719,10 +815,10 @@ export const AdminPage: React.FC = () => {
                                   End
                                 </button>
                               )}
-                            <button 
-                              onClick={() => viewLeaderboard(leaderboard._id)}
-                              className="text-blue-600 hover:text-blue-900 flex items-center gap-1"
-                            >
+                              <button 
+                                onClick={() => viewLeaderboard(leaderboard._id)}
+                                className="text-blue-600 hover:text-blue-900 flex items-center gap-1"
+                              >
                                 <Eye className="h-4 w-4" />
                                 View
                               </button>
@@ -831,6 +927,91 @@ export const AdminPage: React.FC = () => {
                       ))}
                     </div>
                   )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* System Tab */}
+          {activeTab === 'system' && (
+            <div className="space-y-6">
+              {/* Gamification Maintenance */}
+              <div className="bg-white rounded-lg shadow-sm border p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <Zap className="h-6 w-6 text-yellow-600" />
+                  <h3 className="text-lg font-semibold text-gray-900">Gamification Maintenance</h3>
+                </div>
+                <p className="text-sm text-gray-600 mb-6">Sync user XP and recalculate Student of the Week awards</p>
+
+                {syncMessage && (
+                  <div className={`mb-4 p-4 rounded-lg ${
+                    syncMessage.startsWith('✓')
+                      ? 'bg-green-50 text-green-800 border border-green-200'
+                      : 'bg-red-50 text-red-800 border border-red-200'
+                  }`}>
+                    {syncMessage}
+                  </div>
+                )}
+
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h4 className="font-semibold text-gray-900 mb-2">Sync All Users XP</h4>
+                          <p className="text-sm text-gray-700 mb-4">
+                            Manually synchronize XP calculations for all users based on their quiz scores, daily logins, and activity.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={syncAllXp}
+                        disabled={syncingXp}
+                        className="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-blue-400 flex items-center justify-center gap-2"
+                      >
+                        <RefreshCw className={`h-4 w-4 ${syncingXp ? 'animate-spin' : ''}`} />
+                        {syncingXp ? 'Syncing...' : 'Sync All XP'}
+                      </button>
+                    </div>
+
+                    <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h4 className="font-semibold text-gray-900 mb-2">Recalculate Student of the Week</h4>
+                          <p className="text-sm text-gray-700 mb-4">
+                            Recalculate and announce the winner of this week's Student of the Week based on current XP rankings.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={recalculateSotw}
+                        disabled={recalculatingSotw}
+                        className="w-full bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 disabled:bg-purple-400 flex items-center justify-center gap-2"
+                      >
+                        <Trophy className={`h-4 w-4 ${recalculatingSotw ? 'animate-spin' : ''}`} />
+                        {recalculatingSotw ? 'Recalculating...' : 'Recalculate SOTW'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* System Information */}
+              <div className="bg-white rounded-lg shadow-sm border p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">System Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-4 bg-gray-50 rounded-lg">
+                    <p className="text-sm text-gray-600 mb-1">Total XP Distributed</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {analytics?.totalUsers ? (analytics.totalUsers * 100).toLocaleString() : '0'}
+                    </p>
+                  </div>
+                  <div className="p-4 bg-gray-50 rounded-lg">
+                    <p className="text-sm text-gray-600 mb-1">Active Competitions</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {leaderboards.filter(l => l.status === 'active').length}
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
