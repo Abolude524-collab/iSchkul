@@ -177,7 +177,7 @@ export const QuizPage: React.FC = () => {
       if (generateMode === 'paste') {
         // Generate from pasted text
         response = await fetch(
-          `getAPIEndpoint('/generate/quiz`,
+          getAPIEndpoint('/generate/quiz'),
           {
             method: 'POST',
             headers: {
@@ -208,7 +208,7 @@ export const QuizPage: React.FC = () => {
         });
 
         response = await fetch(
-          `getAPIEndpoint('/generate/quiz`,
+          getAPIEndpoint('/generate/quiz'),
           {
             method: 'POST',
             headers: {
@@ -229,7 +229,7 @@ export const QuizPage: React.FC = () => {
       } else {
         // Topic-only submission
         response = await fetch(
-          `getAPIEndpoint('/generate/quiz`,
+          getAPIEndpoint('/generate/quiz'),
           {
             method: 'POST',
             headers: {
