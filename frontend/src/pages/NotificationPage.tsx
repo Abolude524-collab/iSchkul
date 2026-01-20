@@ -27,7 +27,7 @@ export const NotificationPage: React.FC = () => {
 
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/notifications`, {
+      const response = await fetch(getAPIEndpoint('/notifications'), {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -50,7 +50,7 @@ export const NotificationPage: React.FC = () => {
   const markAsRead = async (notificationId: string) => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/notifications/${notificationId}/read`, {
+      const response = await fetch(getAPIEndpoint('/notifications/${notificationId}/read'), {
         method: 'PUT',
         headers: {
           Authorization: `Bearer ${token}`,

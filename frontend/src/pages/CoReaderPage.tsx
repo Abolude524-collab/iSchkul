@@ -145,7 +145,7 @@ export const CoReaderPage: React.FC = () => {
         setQuizLoading(true);
         try {
             const token = localStorage.getItem('authToken');
-            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/co-reader/pomodoro-quiz`, {
+            const response = await fetch(getAPIEndpoint('/co-reader/pomodoro-quiz'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -206,7 +206,7 @@ export const CoReaderPage: React.FC = () => {
 
             // Call Backend API
             const token = localStorage.getItem('authToken');
-            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/co-reader/chat`, {
+            const response = await fetch(getAPIEndpoint('/co-reader/chat'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

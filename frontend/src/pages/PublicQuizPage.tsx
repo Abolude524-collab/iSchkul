@@ -66,7 +66,7 @@ const PublicQuizPage: React.FC = () => {
   const fetchQuiz = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/quizzes/public/${id}`);
+      const response = await fetch(getAPIEndpoint('/quizzes/public/${id}'));
 
       if (!response.ok) {
         if (response.status === 404) {

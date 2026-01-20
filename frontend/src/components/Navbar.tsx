@@ -22,7 +22,7 @@ export const Navbar: React.FC = () => {
     if (!user) return;
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/notifications/count`, {
+      const response = await fetch(getAPIEndpoint('/notifications/count'), {
         headers: {
           Authorization: `Bearer ${token}`,
         },

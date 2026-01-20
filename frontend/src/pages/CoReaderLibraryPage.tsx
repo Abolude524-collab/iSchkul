@@ -26,7 +26,7 @@ export const CoReaderLibraryPage: React.FC = () => {
     const fetchDocuments = async () => {
         try {
             const token = localStorage.getItem('authToken');
-            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/documents`, {
+            const response = await fetch(getAPIEndpoint('/documents'), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (response.ok) {
@@ -57,7 +57,7 @@ export const CoReaderLibraryPage: React.FC = () => {
 
         try {
             const token = localStorage.getItem('authToken');
-            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/documents/upload`, {
+            const response = await fetch(getAPIEndpoint('/documents/upload'), {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` },
                 body: formData

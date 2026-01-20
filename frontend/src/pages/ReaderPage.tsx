@@ -36,7 +36,7 @@ export const ReaderPage: React.FC = () => {
     try {
       const token = localStorage.getItem('authToken');
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/chat/send`,
+        getAPIEndpoint('/chat/send'),
         {
           method: 'POST',
           headers: {
@@ -95,7 +95,7 @@ export const ReaderPage: React.FC = () => {
       formData.append('file', file);
 
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/files/upload`,
+        getAPIEndpoint('/files/upload'),
         {
           method: 'POST',
           headers: {
