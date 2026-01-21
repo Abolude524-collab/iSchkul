@@ -117,26 +117,32 @@ router.get('/public', async (req, res) => {
       return res.status(400).json({ error: 'Share code is required' });
     }
 
+    console.log('[Shared Flashcards] Fetching set with shareCode:', shareCode);
+
     const client = new MongoClient(process.env.MONGODB_URI || 'mongodb://localhost:27017/ischkul');
     await client.connect();
     const db = client.db();
     const setsCollection = db.collection("flashcard_sets");
     const cardsCollection = db.collection("flashcards");
 
-    const set = await setsCollection.findOne({
-      shareCode,
-      isPublic: true
-    });
+    // FIXED: Don't require isPublic for shared flashcards - shareCode is the access control
+    const set = await setsCollection.findOne({ shareCode });
 
     if (!set) {
+      console.log('[Shared Flashcards] Set not found for shareCode:', shareCode);
+      await client.close();
       return res.status(404).json({ error: 'Flashcard set not found' });
     }
+
+    console.log('[Shared Flashcards] Set found:', set.title, 'ID:', set._id);
 
     // Get flashcards for this set
     const flashcards = await cardsCollection
       .find({ setId: set._id })
       .sort({ createdAt: 1 })
       .toArray();
+
+    console.log('[Shared Flashcards] Found', flashcards.length, 'cards for set');
 
     // Increment view count
     await setsCollection.updateOne(
@@ -146,8 +152,12 @@ router.get('/public', async (req, res) => {
 
     res.json({
       success: true,
-      set: {
+      flashcardSet: {
         ...set,
+        flashcards,
+        cardCount: flashcards.length, // Ensure accurate count
+      },
+    });
         flashcards,
       },
     });

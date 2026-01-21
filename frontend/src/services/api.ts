@@ -73,9 +73,9 @@ export const quizAPI = {
   generateQuiz: (text: string, numQuestions: number, createdBy: string, groupId?: string) =>
     apiClient.post('/generate/quiz', { text, numQuestions, createdBy, groupId }),
   getQuiz: (quizId: string) =>
-    apiClient.get(`/quiz/${quizId}`),
+    apiClient.get(`/quizzes/${quizId}`),
   submitQuiz: (quizId: string, answers: any[], userId: string) =>
-    apiClient.post(`/quiz/${quizId}/submit`, { answers, userId }),
+    apiClient.post(`/quizzes/${quizId}/submit`, { answers, userId }),
 }
 
 // Group endpoints

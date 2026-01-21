@@ -53,16 +53,15 @@ router.post('/create', auth, async (req, res) => {
   }
 });
 
-// Get all quizzes (public or user's own)
+// Get all quizzes (only user's own quizzes)
 router.get('/', auth, async (req, res) => {
   try {
     const { subject, difficulty, limit = 20, offset = 0 } = req.query;
 
+    // FIXED: Only return quizzes created by the current user
+    // Public quizzes can still be accessed via direct link (/quizzes/:id or /public/:id)
     let query = {
-      $or: [
-        { isPublic: true },
-        { createdBy: req.user._id }
-      ]
+      createdBy: req.user._id
     };
 
     if (subject) query.subject = new RegExp(subject, 'i');

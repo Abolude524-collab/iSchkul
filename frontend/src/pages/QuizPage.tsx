@@ -146,6 +146,7 @@ export const QuizPage: React.FC = () => {
     const count = quiz?.questions?.length || 0;
     const estimatedMinutes = Math.max(1, Math.ceil(count * 1.5));
     setTimeRemaining(estimatedMinutes * 60); // Convert to seconds
+    setStartTime(new Date()); // FIXED: Set start time for tracking
     setShowCalculator(false); // Hide calculator initially
     setCalcDisplay('0'); // Reset calculator
     setCalcPreviousValue(null);
@@ -310,9 +311,11 @@ export const QuizPage: React.FC = () => {
       return;
     }
 
-    if (!quiz) return;
+    // FIXED: Use selectedQuiz instead of quiz for retakes
+    const currentQuiz = selectedQuiz || quiz;
+    if (!currentQuiz) return;
 
-    const qs = quiz?.questions || [];
+    const qs = currentQuiz?.questions || [];
     let correctCount = 0;
     qs.forEach((question, index) => {
       if (answers[index] === question.correctAnswer) {
@@ -326,9 +329,12 @@ export const QuizPage: React.FC = () => {
 
     // Save quiz result
     try {
+      setLoading(true);
       const token = localStorage.getItem('authToken');
+      const timeSpent = startTime ? Math.floor((new Date().getTime() - startTime.getTime()) / 1000) : 0;
+      
       const submitResponse = await fetch(
-        getAPIEndpoint(`/quizzes/${quiz._id}/submit`),
+        getAPIEndpoint(`/quizzes/${currentQuiz._id}/submit`),
         {
           method: 'POST',
           headers: {
@@ -337,14 +343,14 @@ export const QuizPage: React.FC = () => {
           },
           body: JSON.stringify({
             answers,
-            score: percentage,
-            timeSpent: 0,
+            timeSpent,
           }),
         }
       );
 
       if (submitResponse.ok) {
         const submitData = await submitResponse.json();
+        setQuizResult(submitData.result);
         setAttemptNumber(submitData.attemptNumber || 1);
 
         // Award XP for quiz completion
@@ -355,9 +361,15 @@ export const QuizPage: React.FC = () => {
         } catch (xpError) {
           console.error('Failed to award XP:', xpError);
         }
+      } else {
+        const err = await submitResponse.json();
+        setError(err.error || 'Failed to submit quiz');
       }
     } catch (err: any) {
       console.error('Failed to save quiz result:', err.message);
+      setError(err.message || 'Failed to submit quiz');
+    } finally {
+      setLoading(false);
     }
   };
 

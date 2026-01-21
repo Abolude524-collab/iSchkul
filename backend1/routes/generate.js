@@ -7,6 +7,7 @@ const pdfParse = require('pdf-parse');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const Quiz = require('../models/Quiz');
 const Question = require('../models/Question');
+const User = require('../models/User');
 
 // Optional dependencies - lazy loaded only when needed
 let Tesseract;
@@ -36,6 +37,99 @@ async function loadJSZip() {
     }
   }
   return JSZip;
+}
+
+// Educator role mapping based on student category
+const educatorRoleMap = {
+  'Secondary School Student': 'a patient and engaging secondary school teacher who explains concepts in simple terms suitable for teenagers',
+  'University Student': 'a university lecturer or professor who asks questions testing conceptual understanding and real-world application',
+  'Postgraduate Student': 'an advanced academic professor designing highly analytical and research-oriented questions',
+  'Vocational/Technical Student': 'a practical technical instructor focusing on applied skills and hands-on knowledge',
+  'Other': 'a versatile educator adapting to the learner\'s level'
+};
+
+// Difficulty level definitions and guidelines
+const difficultyGuidelines = {
+  'easy': {
+    label: 'Easy',
+    description: 'Focus on basic recall and fundamental understanding',
+    guidelines: 'Questions should test vocabulary, basic definitions, and straightforward facts. Use simple language and direct concepts from the material.',
+    bloomLevel: 'Remember/Understand'
+  },
+  'medium': {
+    label: 'Medium',
+    description: 'Balance between recall and application of concepts',
+    guidelines: 'Questions should require students to apply knowledge, make comparisons, and show understanding of relationships between concepts.',
+    bloomLevel: 'Apply/Analyze'
+  },
+  'hard': {
+    label: 'Hard',
+    description: 'Emphasize analysis and synthesis of complex concepts',
+    guidelines: 'Questions should require deep understanding, critical thinking, and the ability to connect multiple concepts or analyze scenarios.',
+    bloomLevel: 'Analyze/Evaluate'
+  },
+  'veryhard': {
+    label: 'Very Hard',
+    description: 'Maximum cognitive challenge requiring expert-level thinking',
+    guidelines: 'Questions should demand synthesis, evaluation, and creation of new insights. Include edge cases, exceptions, and complex scenarios.',
+    bloomLevel: 'Evaluate/Create'
+  }
+};
+
+// Helper function to get educator role based on student category
+function getEducatorRole(studentCategory) {
+  return educatorRoleMap[studentCategory] || educatorRoleMap['Other'];
+}
+
+// Helper function to build prompt with subject-specific requirements
+function buildQuizPrompt(numQuestions, difficulty, contentText, subject, studentCategory, educatorRole) {
+  const diffGuideline = difficultyGuidelines[difficulty] || difficultyGuidelines['medium'];
+  
+  // Special handling for math/calculation subjects
+  const isMathSubject = subject && /math|calculation|algebra|geometry|trigonometry|calculus|statistics|physics|chemistry/i.test(subject);
+  
+  let subjectSpecificInstructions = '';
+  if (isMathSubject) {
+    subjectSpecificInstructions = `
+SPECIAL INSTRUCTIONS FOR ${subject.toUpperCase()}:
+- For mathematical questions, include numerical calculations or numerical answers
+- Show the working/steps in the explanation
+- Provide options with common calculation errors as distractors
+- Include both theoretical and computational questions
+- Ensure numerical accuracy in all answers and explanations`;
+  }
+
+  const prompt = `You are ${educatorRole}.
+
+Generate ${numQuestions} high-quality multiple-choice questions (MCQs) based on the study material provided.
+
+DIFFICULTY LEVEL: ${diffGuideline.label.toUpperCase()}
+Description: ${diffGuideline.description}
+Bloom's Level: ${diffGuideline.bloomLevel}
+Guidelines: ${diffGuideline.guidelines}
+
+TEXT SOURCE (Study Material):
+${contentText.substring(0, 3000)}
+
+REQUIREMENTS:
+- Each question must have exactly 4 options (A, B, C, D)
+- Questions should be directly relevant to the provided content
+- Include a clear explanation for each correct answer that references the source material
+- Difficulty should match the specified level${subjectSpecificInstructions}
+
+Return ONLY valid JSON in this exact format with no additional text or markdown:
+{
+  "questions": [
+    {
+      "text": "Clear, specific question about the content?",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correctAnswer": 0,
+      "explanation": "Brief explanation of why this answer is correct, referencing the source material"
+    }
+  ]
+}`;
+
+  return prompt;
 }
 
 const router = express.Router();
@@ -305,33 +399,37 @@ router.post('/quiz', auth, async (req, res) => {
         console.log('OpenAI API key found, length:', process.env.OPENAI_API_KEY.length);
         console.log('Attempting AI quiz generation for content length:', contentText.length);
 
-        // Prepare a more detailed prompt for better AI generation
-        const prompt = `Generate a quiz with ${numQuestions || 5} multiple-choice questions based on this text. Each question must have exactly 4 options (A, B, C, D) and be directly relevant to the content.
+        // Fetch user category from database
+        let studentCategory = 'Other';
+        try {
+          const user = await User.findById(req.user._id);
+          if (user && user.studentCategory) {
+            studentCategory = user.studentCategory;
+            console.log('Retrieved student category:', studentCategory);
+          }
+        } catch (userError) {
+          console.warn('Could not fetch student category, using default:', userError.message);
+        }
 
-Text content: ${contentText.substring(0, 3000)}
+        // Get educator role based on student category
+        const educatorRole = getEducatorRole(studentCategory);
 
-Requirements:
-- Questions should test understanding of key concepts from the text
-- Each question must have exactly 4 answer options
-- Include a brief explanation for each correct answer
-- Make questions specific to the content provided
-- Difficulty level: ${difficulty}
-
-Return ONLY valid JSON in this exact format with no additional text:
-{
-  "questions": [
-    {
-      "text": "Specific question about the content?",
-      "options": ["Option A", "Option B", "Option C", "Option D"],
-      "correctAnswer": 0,
-      "explanation": "Brief explanation of why this answer is correct based on the content"
-    }
-  ]
-}`;
+        // Build enhanced prompt with subject-specific guidelines
+        const prompt = buildQuizPrompt(
+          numQuestions || 5,
+          difficulty,
+          contentText,
+          subject,
+          studentCategory,
+          educatorRole
+        );
 
         const response = await axios.post('https://api.openai.com/v1/chat/completions', {
           model: 'gpt-3.5-turbo',
           messages: [{
+            role: 'system',
+            content: `You are an expert educational assessment designer. Generate high-quality multiple-choice questions tailored to ${studentCategory} level.`
+          }, {
             role: 'user',
             content: prompt
           }],
@@ -418,28 +516,16 @@ Return ONLY valid JSON in this exact format with no additional text:
             const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
             const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
-            const geminiPrompt = `Generate a quiz with ${numQuestions || 5} multiple-choice questions based on this text. Each question must have exactly 4 options and be directly relevant to the content.
-
-Text content: ${contentText.substring(0, 4000)}
-
-Requirements:
-- Questions should test understanding of key concepts from the text
-- Each question must have exactly 4 answer options
-- Include a brief explanation for each correct answer
-- Make questions specific to the content provided
-- Difficulty level: ${difficulty}
-
-Return ONLY valid JSON in this exact format with no additional text:
-{
-  "questions": [
-    {
-      "text": "Specific question about the content?",
-      "options": ["Option A", "Option B", "Option C", "Option D"],
-      "correctAnswer": 0,
-      "explanation": "Brief explanation of why this answer is correct based on the content"
-    }
-  ]
-}`;
+            // Reuse educator role and student category from OpenAI attempt
+            const educatorRole = getEducatorRole(studentCategory);
+            const geminiPrompt = buildQuizPrompt(
+              numQuestions || 5,
+              difficulty,
+              contentText,
+              subject,
+              studentCategory,
+              educatorRole
+            );
 
             const result = await model.generateContent(geminiPrompt);
             const response = await result.response;
