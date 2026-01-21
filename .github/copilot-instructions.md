@@ -1,7 +1,7 @@
 # ischkul-azure: AI Agent Guide
 
-**Project Type**: Azure-native education platform for Imagine Cup 2026  
-**Architecture**: Express.js + MongoDB/Cosmos DB + Socket.io + Azure OpenAI + Azure AI Search
+**Project Type**: AI-powered education platform for students
+**Architecture**: Express.js + MongoDB/Cosmos DB + Socket.io + OpenAI + Vector Search
 
 ## Project Structure
 

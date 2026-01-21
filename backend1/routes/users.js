@@ -9,9 +9,17 @@ const router = express.Router();
 router.get('/search', auth, async (req, res) => {
   try {
     const { q } = req.query;
+    console.log('[User Search] Query:', q);
+    console.log('[User Search] Current user ID:', req.user._id);
+    
     if (!q) {
+      console.log('[User Search] No query provided, returning empty array');
       return res.json({ users: [] });
     }
+
+    // First check total users in database
+    const totalUsers = await User.countDocuments();
+    console.log('[User Search] Total users in database:', totalUsers);
 
     const users = await User.find({
       $and: [
@@ -19,15 +27,20 @@ router.get('/search', auth, async (req, res) => {
         {
           $or: [
             { name: { $regex: q, $options: 'i' } },
-            { username: { $regex: q, $options: 'i' } }
+            { username: { $regex: q, $options: 'i' } },
+            { email: { $regex: q, $options: 'i' } }
           ]
         }
       ]
-    }).select('name username avatar').limit(10);
+    }).select('name username email avatar').limit(10);
+
+    console.log('[User Search] Found', users.length, 'users matching query:', q);
+    console.log('[User Search] Results:', users.map(u => ({ id: u._id, name: u.name, username: u.username, email: u.email })));
 
     res.json({ users });
   } catch (error) {
-    res.status(500).json({ error: 'Server error' });
+    console.error('[User Search] Error:', error);
+    res.status(500).json({ error: 'Server error', details: error.message });
   }
 });
 

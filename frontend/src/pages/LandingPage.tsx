@@ -40,10 +40,10 @@ export const LandingPage: React.FC = () => {
   ];
 
   const stats = [
-    { value: '10K+', label: 'Active Students' },
-    { value: '500+', label: 'Quizzes Generated' },
-    { value: '50M+', label: 'Vector Embeddings' },
-    { value: '99.9%', label: 'Uptime' },
+    { value: '2,500+', label: 'Active Learners' },
+    { value: '15,000+', label: 'Quizzes Created' },
+    { value: '50,000+', label: 'Study Sessions' },
+    { value: '98%', label: 'Student Satisfaction' },
   ];
 
   return (
@@ -59,7 +59,7 @@ export const LandingPage: React.FC = () => {
                 Learn Smarter with AI
               </h1>
               <p className="text-lg md:text-xl text-blue-100 max-w-xl">
-                ischkul combines intelligent tutoring, real-time collaboration, and spaced repetition to revolutionize how you learn.
+                ischkul combines AI-powered tutoring, real-time collaboration, and spaced repetition to help students achieve academic excellence.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
                 <Link
@@ -156,7 +156,7 @@ export const LandingPage: React.FC = () => {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl md:text-4xl font-bold mb-6">Ready to Transform Your Learning?</h2>
           <p className="text-lg text-blue-100 mb-8">
-            Join thousands of students already using ischkul to achieve their academic goals.
+            Join students worldwide who are already using ischkul to achieve their academic goals.
           </p>
           <Link
             to="/signup"

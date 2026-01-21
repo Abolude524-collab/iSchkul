@@ -9,7 +9,7 @@ import { GroupSettings } from '../components/GroupSettings';
 import { VideoCall } from '../components/VideoCall';
 import { useAuthStore } from '../services/store';
 import { usePersonalChatStore } from '../services/store';
-import { personalChatAPI, groupAPI, chatAPI } from '../services/api';
+import { personalChatAPI, groupAPI, chatAPI, getAPIEndpoint } from '../services/api';
 import { Send, Loader, AlertCircle, Users, Settings, MessageSquare, User, Bell, UserPlus, ArrowLeft, Video, Phone } from 'lucide-react';
 import io, { Socket } from 'socket.io-client';
 import EmojiPicker from 'emoji-picker-react';
@@ -448,7 +448,7 @@ export const ChatPage: React.FC = () => {
   const fetchChatProfile = async () => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`getAPIEndpoint('/users/${user?.id}/chat-profile`, {
+      const response = await fetch(getAPIEndpoint(`/users/${user?.id}/chat-profile`), {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -467,7 +467,7 @@ export const ChatPage: React.FC = () => {
   const fetchContactRequests = async () => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`getAPIEndpoint('/contact-requests/received`, {
+      const response = await fetch(getAPIEndpoint('/contact-requests/received'), {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -504,7 +504,7 @@ export const ChatPage: React.FC = () => {
   const markNotificationAsRead = async (notificationId: string) => {
     try {
       const token = localStorage.getItem('authToken');
-      await fetch(`getAPIEndpoint('/notifications/${notificationId}/read`, {
+      await fetch(getAPIEndpoint(`/notifications/${notificationId}/read`), {
         method: 'PUT',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -526,7 +526,7 @@ export const ChatPage: React.FC = () => {
   const markAllNotificationsAsRead = async () => {
     try {
       const token = localStorage.getItem('authToken');
-      await fetch(`getAPIEndpoint('/notifications/read-all`, {
+      await fetch(getAPIEndpoint('/notifications/read-all'), {
         method: 'PUT',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -548,7 +548,7 @@ export const ChatPage: React.FC = () => {
     }
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`getAPIEndpoint('/users/search?q=${encodeURIComponent(query)}`, {
+      const response = await fetch(getAPIEndpoint(`/users/search?q=${encodeURIComponent(query)}`), {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -893,7 +893,7 @@ export const ChatPage: React.FC = () => {
   const handleSaveChatProfile = async () => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`getAPIEndpoint('/users/chat-profile`, {
+      const response = await fetch(getAPIEndpoint('/users/chat-profile'), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -917,7 +917,7 @@ export const ChatPage: React.FC = () => {
   const handleSendConnectRequest = async (recipientId: string) => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`getAPIEndpoint('/contact-requests/send`, {
+      const response = await fetch(getAPIEndpoint('/contact-requests/send'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -942,7 +942,7 @@ export const ChatPage: React.FC = () => {
   const handleAcceptRequest = async (requestId: string) => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`getAPIEndpoint('/contact-requests/${requestId}/accept`, {
+      const response = await fetch(getAPIEndpoint(`/contact-requests/${requestId}/accept`), {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -977,7 +977,7 @@ export const ChatPage: React.FC = () => {
   const handleRejectRequest = async (requestId: string) => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`getAPIEndpoint('/contact-requests/${requestId}/reject`, {
+      const response = await fetch(getAPIEndpoint(`/contact-requests/${requestId}/reject`), {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
