@@ -198,7 +198,7 @@ const PublicQuizPage: React.FC = () => {
                 <div className="text-sm text-purple-700 font-medium">Difficulty</div>
               </div>
               <div className="bg-orange-50 p-6 rounded-lg">
-                <div className="text-2xl font-bold text-orange-600 mb-1">{quiz.subject}</div>
+                <div className="text-2xl font-bold text-orange-600 mb-1">{quiz.subject || 'General'}</div>
                 <div className="text-sm text-orange-700 font-medium">Subject</div>
               </div>
             </div>

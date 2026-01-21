@@ -5,7 +5,7 @@ import { Footer } from '../components/Footer';
 import { useAuthStore } from '../services/store';
 import { gamificationAPI, getAPIEndpoint } from '../services/api';
 import { Loader, AlertCircle, CheckCircle, XCircle, Brain, Calculator, Plus, BookOpen, Trophy, Clock, Edit, Trash2, Play, Share2, History, TrendingUp, BarChart2, ChevronLeft } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell, Legend } from 'recharts';
 import { QuizSettingsForm } from '../components/QuizSettingsForm';
 import { QuestionListEditor } from '../components/QuestionListEditor';
 import { Question as QuizQuestion, QuizCreateForm } from '../types/quiz';
@@ -116,6 +116,18 @@ export const QuizPage: React.FC = () => {
       navigate('/login');
     }
   }, [user, navigate]);
+
+  // Derived stats for results & charts
+  const totalQuestions = selectedQuiz?.questions?.length || quizResult?.totalQuestions || 0;
+  const correctCount = Math.round((score / 100) * totalQuestions);
+  const incorrectCount = Math.max(totalQuestions - correctCount, 0);
+  const timeSpentSeconds = quizResult?.timeSpent ?? (startTime ? Math.floor((Date.now() - startTime.getTime()) / 1000) : 0);
+  const timeSpentDisplay = `${Math.floor(timeSpentSeconds / 60)}m ${timeSpentSeconds % 60}s`;
+  const pieData = [
+    { name: 'Correct', value: correctCount },
+    { name: 'Incorrect', value: incorrectCount },
+  ];
+  const pieColors = ['#16a34a', '#ef4444'];
 
   // Timer effect
   useEffect(() => {
@@ -865,7 +877,7 @@ export const QuizPage: React.FC = () => {
                     <div className="flex justify-between items-start mb-4">
                       <div className="flex-1">
                         <h3 className="text-lg font-semibold text-gray-900 mb-1">{quiz.title}</h3>
-                        <p className="text-sm text-gray-600">{quiz.subject}</p>
+                        <p className="text-sm text-gray-600">{quiz.subject || 'General'}</p>
                       </div>
                       <div className="flex gap-2">
                         <button
@@ -906,7 +918,7 @@ export const QuizPage: React.FC = () => {
                     <div className="space-y-2 mb-4">
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">Subject:</span>
-                        <span className="font-medium">{quiz.subject}</span>
+                        <span className="font-medium">{quiz.subject || 'General'}</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">Difficulty:</span>
@@ -1360,7 +1372,7 @@ export const QuizPage: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <span className="text-gray-600">Subject:</span>
-                    <span className="ml-2 font-medium text-gray-900">{quiz.subject}</span>
+                    <span className="ml-2 font-medium text-gray-900">{quiz.subject || 'General'}</span>
                   </div>
                   <div>
                     <span className="text-gray-600">Difficulty:</span>
@@ -1612,40 +1624,79 @@ export const QuizPage: React.FC = () => {
             )}
           </div>
         ) : submitted ? (
-          <div className="max-w-2xl mx-auto">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-              <div className="text-center mb-8">
+          <div className="max-w-5xl mx-auto">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 md:p-10 space-y-8">
+              <div className="text-center">
                 {score >= 80 ? (
-                  <CheckCircle size={64} className="text-green-500 mx-auto mb-4" />
+                  <CheckCircle size={72} className="text-green-500 mx-auto mb-4" />
                 ) : score >= 60 ? (
-                  <AlertCircle size={64} className="text-yellow-500 mx-auto mb-4" />
+                  <AlertCircle size={72} className="text-yellow-500 mx-auto mb-4" />
                 ) : (
-                  <XCircle size={64} className="text-red-500 mx-auto mb-4" />
+                  <XCircle size={72} className="text-red-500 mx-auto mb-4" />
                 )}
-                <h2 className="text-3xl font-bold text-gray-900 mt-4">Quiz Complete!</h2>
-                <p className="text-gray-600 mt-2">Attempt #{attemptNumber} - You scored</p>
+                <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mt-2">Quiz Complete!</h2>
+                <p className="text-gray-600 mt-2">Attempt #{attemptNumber} • {selectedQuiz?.title}</p>
               </div>
 
-              <div className="text-center mb-8">
-                <p className="text-6xl font-bold text-blue-600">{score.toFixed(0)}%</p>
-                <p className="text-gray-600 mt-2">
-                  {Math.round((score / 100) * ((selectedQuiz?.questions?.length || 0)))} of {selectedQuiz?.questions?.length || 0} correct
-                </p>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-gray-50 rounded-xl p-6 flex flex-col justify-center gap-3">
+                  <div className="text-6xl md:text-7xl font-bold text-blue-600 leading-none">{score.toFixed(0)}%</div>
+                  <p className="text-gray-700 text-lg">
+                    {correctCount} / {totalQuestions} correct
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+                    <div className="p-4 rounded-lg bg-white border border-gray-200 flex items-center justify-between">
+                      <div>
+                        <p className="text-xs uppercase text-gray-500">Time Taken</p>
+                        <p className="text-lg font-semibold text-gray-900">{timeSpentDisplay}</p>
+                      </div>
+                      <Clock className="text-blue-600" size={20} />
+                    </div>
+                    <div className="p-4 rounded-lg bg-white border border-gray-200">
+                      <p className="text-xs uppercase text-gray-500">Difficulty</p>
+                      <p className="text-lg font-semibold text-gray-900 capitalize">{selectedQuiz?.difficulty}</p>
+                      <p className="text-xs text-gray-500 mt-1">Subject: {selectedQuiz?.subject || 'General'}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-center">
+                  <div className="w-full max-w-sm">
+                    <PieChart width={320} height={240}>
+                      <Pie
+                        data={pieData}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={90}
+                        innerRadius={50}
+                        paddingAngle={3}
+                        label
+                      >
+                        {pieData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={pieColors[index % pieColors.length]} />
+                        ))}
+                      </Pie>
+                      <Legend />
+                    </PieChart>
+                  </div>
+                </div>
               </div>
 
-              <div className="space-y-4 mb-8">
+              <div className="space-y-4">
                 {selectedQuiz?.questions?.map((question, index) => (
-                  <div key={index} className="bg-gray-50 p-4 rounded-lg">
-                    <p className="font-medium text-gray-900 mb-2">{question.text}</p>
+                  <div key={index} className="bg-gray-50 p-5 md:p-6 rounded-xl border border-gray-200">
+                    <p className="font-semibold text-gray-900 mb-3 leading-relaxed">{question.text}</p>
                     <div className="space-y-2">
                       {question.options.map((option, optIndex) => (
                         <div
                           key={optIndex}
-                          className={`p-2 rounded ${optIndex === question.correctAnswer
-                            ? 'bg-green-100 border border-green-500'
+                          className={`p-3 md:p-4 rounded-lg border transition ${optIndex === question.correctAnswer
+                            ? 'bg-green-50 border-green-500'
                             : optIndex === answers[index]
-                              ? 'bg-red-100 border border-red-500'
-                              : 'bg-gray-100'
+                              ? 'bg-red-50 border-red-400'
+                              : 'bg-white border-gray-200'
                             }`}
                         >
                           {optIndex === question.correctAnswer && answers[index] === optIndex && (
@@ -1654,28 +1705,28 @@ export const QuizPage: React.FC = () => {
                           {optIndex === answers[index] && optIndex !== question.correctAnswer && (
                             <XCircle size={16} className="inline mr-2 text-red-600" />
                           )}
-                          <span className="text-sm">{option}</span>
+                          <span className="text-sm md:text-base text-gray-900">{option}</span>
                         </div>
                       ))}
                     </div>
                     {question.explanation && (
-                      <div className="mt-2 p-2 bg-blue-50 rounded border-l-4 border-blue-500">
-                        <p className="text-xs font-semibold text-blue-900">Explanation:</p>
-                        <p className="text-xs text-blue-800">{question.explanation}</p>
+                      <div className="mt-3 p-3 bg-blue-50 rounded-lg border-l-4 border-blue-500">
+                        <p className="text-xs font-semibold text-blue-900 uppercase tracking-wide">Explanation</p>
+                        <p className="text-sm text-blue-800 mt-1 leading-relaxed">{question.explanation}</p>
                       </div>
                     )}
                   </div>
                 ))}
               </div>
 
-              <div className="flex gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                 <button
                   onClick={() => {
-                    // Retake the same quiz
                     const estimatedMinutes = Math.max(1, Math.ceil((quiz?.questions?.length || 0) * 1.5));
                     setTimeRemaining(estimatedMinutes * 60);
-                    setShowCalculator(false); // Hide calculator initially
-                    setCalcDisplay('0'); // Reset calculator
+                    setStartTime(new Date());
+                    setShowCalculator(false);
+                    setCalcDisplay('0');
                     setCalcPreviousValue(null);
                     setCalcOperation(null);
                     setCalcWaitingForOperand(false);
@@ -1684,9 +1735,8 @@ export const QuizPage: React.FC = () => {
                     setAnswers(new Array(selectedQuiz?.questions?.length || 0).fill(-1));
                     setSubmitted(false);
                     setScore(0);
-                    // Don't reset attempt number for retakes
                   }}
-                  className="flex-1 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-lg hover:shadow-lg transition-all"
+                  className="w-full px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-lg hover:shadow-lg transition-all"
                 >
                   Retake Quiz
                 </button>
@@ -1698,20 +1748,20 @@ export const QuizPage: React.FC = () => {
                     setAttemptNumber(1);
                     setFormData({ topic: '', subject: '', difficulty: 'medium', numQuestions: '5', timeLimit: 30 });
                   }}
-                  className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg transition-all"
+                  className="w-full px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg transition-all"
                 >
                   Create Another Quiz
                 </button>
                 <button
                   onClick={() => setView('history')}
-                  className="flex-1 px-6 py-3 bg-white border border-gray-300 text-gray-900 font-semibold rounded-lg hover:bg-gray-50 transition-all flex items-center justify-center gap-2"
+                  className="w-full px-6 py-3 bg-white border border-gray-300 text-gray-900 font-semibold rounded-lg hover:bg-gray-50 transition-all flex items-center justify-center gap-2"
                 >
                   <History size={20} />
                   History
                 </button>
                 <button
                   onClick={() => navigate('/dashboard')}
-                  className="flex-1 px-6 py-3 border border-gray-300 text-gray-900 font-semibold rounded-lg hover:bg-gray-50 transition-all"
+                  className="w-full px-6 py-3 border border-gray-300 text-gray-900 font-semibold rounded-lg hover:bg-gray-50 transition-all"
                 >
                   Back to Dashboard
                 </button>
@@ -1720,13 +1770,17 @@ export const QuizPage: React.FC = () => {
           </div>
         ) : (
           /* Taking Quiz */
-          <div className="max-w-3xl mx-auto">
-            <div className="mb-6">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-2xl font-bold text-gray-900">{selectedQuiz?.title}</h2>
-                <div className="flex items-center gap-4">
-                  <div className="text-lg font-semibold text-gray-700">
-                    Time: {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}
+          <div className="max-w-5xl mx-auto">
+            <div className="mb-6 space-y-3">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <h2 className="text-2xl md:text-3xl font-bold text-gray-900">{selectedQuiz?.title}</h2>
+                  <p className="text-sm text-gray-600 mt-1">Question {currentQuestion + 1} of {selectedQuiz?.questions?.length || 0}</p>
+                </div>
+                <div className="flex flex-wrap gap-3 items-center justify-end">
+                  <div className="px-4 py-2 rounded-full bg-slate-900 text-white text-lg font-semibold shadow-sm flex items-center gap-2">
+                    <Clock size={16} />
+                    <span>{Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}</span>
                   </div>
                   <button
                     onClick={() => setShowCalculator(!showCalculator)}
@@ -1746,52 +1800,49 @@ export const QuizPage: React.FC = () => {
                   </button>
                 </div>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="w-full bg-gray-200 rounded-full h-3">
                 <div
-                  className="bg-blue-600 h-2 rounded-full transition-all"
+                  className="bg-blue-600 h-3 rounded-full transition-all"
                   style={{ width: `${((currentQuestion + 1) / ((selectedQuiz?.questions?.length || 1))) * 100}%` }}
                 ></div>
               </div>
-              <p className="text-sm text-gray-600 mt-2">
-                Question {currentQuestion + 1} of {selectedQuiz?.questions?.length || 0}
-              </p>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-              <h3 className="text-xl font-semibold text-gray-900 mb-6">
+            <div className="bg-white rounded-2xl shadow-md border border-gray-200 p-6 md:p-10">
+              <h3 className="text-xl md:text-2xl font-semibold text-gray-900 mb-6 leading-snug">
                 {selectedQuiz?.questions?.[currentQuestion]?.text}
               </h3>
 
-              <div className="space-y-3 mb-8">
+              <div className="space-y-3 md:space-y-4 mb-8">
                 {selectedQuiz?.questions?.[currentQuestion]?.options.map((option, index) => (
                   <button
                     key={index}
                     onClick={() => handleAnswer(index)}
-                    className={`w-full p-4 text-left rounded-lg border-2 transition-all ${answers[currentQuestion] === index
+                    className={`w-full p-4 md:p-5 text-left rounded-xl border-2 transition-all ${answers[currentQuestion] === index
                       ? 'border-blue-500 bg-blue-50'
                       : 'border-gray-300 hover:border-gray-400 bg-white'
                       }`}
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 md:gap-4">
                       <div
-                        className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${answers[currentQuestion] === index
+                        className={`w-6 h-6 md:w-7 md:h-7 rounded-full border-2 flex items-center justify-center ${answers[currentQuestion] === index
                           ? 'border-blue-500 bg-blue-500'
                           : 'border-gray-300'
                           }`}
                       >
-                        {answers[currentQuestion] === index && <div className="w-2 h-2 bg-white rounded-full"></div>}
+                        {answers[currentQuestion] === index && <div className="w-2 h-2 md:w-2.5 md:h-2.5 bg-white rounded-full"></div>}
                       </div>
-                      <span className="text-gray-900">{option}</span>
+                      <span className="text-gray-900 text-base md:text-lg">{option}</span>
                     </div>
                   </button>
                 ))}
               </div>
 
-              <div className="flex gap-4">
+              <div className="flex flex-col md:flex-row gap-3 md:gap-4">
                 <button
                   onClick={() => setCurrentQuestion(Math.max(0, currentQuestion - 1))}
                   disabled={currentQuestion === 0}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-900 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                  className="flex-1 px-4 py-3 border border-gray-300 text-gray-900 rounded-lg hover:bg-gray-50 disabled:opacity-50"
                 >
                   Previous
                 </button>
@@ -1799,14 +1850,14 @@ export const QuizPage: React.FC = () => {
                 {currentQuestion === ((selectedQuiz?.questions?.length || 0) - 1) ? (
                   <button
                     onClick={handleSubmit}
-                    className="flex-1 px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg hover:shadow-lg transition-all"
+                    className="flex-1 px-4 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg hover:shadow-lg transition-all"
                   >
                     Submit Quiz
                   </button>
                 ) : (
                   <button
                     onClick={() => setCurrentQuestion(currentQuestion + 1)}
-                    className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all"
+                    className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all"
                   >
                     Next
                   </button>
