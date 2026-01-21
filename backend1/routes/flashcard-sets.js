@@ -158,9 +158,6 @@ router.get('/public', async (req, res) => {
         cardCount: flashcards.length, // Ensure accurate count
       },
     });
-        flashcards,
-      },
-    });
 
     await client.close();
   } catch (error) {
