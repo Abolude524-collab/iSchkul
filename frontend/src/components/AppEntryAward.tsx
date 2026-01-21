@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAuthStore } from '../services/store';
+import { getAPIEndpoint } from '../services/api';
 
 export const AppEntryAward: React.FC = () => {
   const { user } = useAuthStore();
@@ -14,7 +15,7 @@ export const AppEntryAward: React.FC = () => {
 
         // Call the enter endpoint to award daily XP if not already awarded today
         // The backend handles atomic operations to prevent duplicates
-        await fetch(`getAPIEndpoint('/gamification/enter`, {
+        await fetch(getAPIEndpoint('/gamification/enter'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

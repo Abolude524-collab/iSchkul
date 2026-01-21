@@ -485,7 +485,7 @@ export const ChatPage: React.FC = () => {
     try {
       setNotificationsLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`getAPIEndpoint('/notifications`, {
+      const response = await fetch(getAPIEndpoint('/notifications'), {
         headers: {
           Authorization: `Bearer ${token}`,
         },
