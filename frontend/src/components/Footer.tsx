@@ -103,7 +103,7 @@ export const Footer: React.FC = () => {
             &copy; {currentYear} ischkul. All rights reserved.
           </p>
           <p className="text-sm text-gray-400">
-            Built for Imagine Cup 2026 | Powered by Microsoft Azure
+            Built for you | Powered by iSchkul team
           </p>
         </div>
       </div>
