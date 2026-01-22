@@ -4,7 +4,9 @@ import { Crown, Trophy, Calendar, Award, Sparkles, Download } from 'lucide-react
 import html2canvas from 'html2canvas';
 
 interface SOTW {
-  user_id: string;
+  _id?: string;
+  id?: string;
+  user_id?: string;
   name: string;
   user: {
     name: string;
@@ -201,7 +203,7 @@ export const StudentOfTheWeek: React.FC = () => {
           <h4 className="text-lg font-semibold text-gray-900 mb-4">Previous Winners</h4>
           <div className="space-y-3">
             {sotwData.previous.slice(0, 5).map((winner, index) => (
-              <div key={winner._id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+              <div key={winner._id || winner.id || winner.user_id || `winner-${index}`} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                 <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-sm font-bold text-gray-600">
                   {index + 1}
                 </div>

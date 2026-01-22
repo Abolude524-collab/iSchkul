@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useSearchParams, useBeforeUnload } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { useAuthStore } from '../services/store';
@@ -8,6 +8,8 @@ import { Loader, AlertCircle, CheckCircle, Clock, BookOpen, Upload, ArrowLeft, P
 import { Flashcard, FlashcardSet } from '../types/flashcards';
 import FlashcardBrowseView from '../components/flashcards/FlashcardBrowseView';
 import FlashcardReviewView from '../components/flashcards/FlashcardReviewView';
+import { OfflineDownloadButton } from '../components/OfflineDownloadButton';
+import { getFlashcardSet, getFlashcardsBySet, getFlashcardSetsByUser, getAllFlashcardSets, getFullSetOffline } from '../services/indexedDB';
 
 // Mode Selection Component
 const ModeSelectionView: React.FC<{
@@ -238,6 +240,12 @@ const FlashcardSetsView: React.FC<{
               >
                 Study Now
               </button>
+              <OfflineDownloadButton
+                type="flashcard"
+                itemId={set._id}
+                itemData={{ set, cards: [] }}
+                size="small"
+              />
               <button
                 onClick={() => onCopyShareLink(set.shareUrl)}
                 className="p-3 border border-gray-100 text-gray-400 rounded-2xl hover:text-blue-600 hover:bg-blue-50 hover:border-blue-100 transition-all active:scale-95"
@@ -399,6 +407,64 @@ export const FlashcardPage: React.FC = () => {
   const [editingSet, setEditingSet] = useState<FlashcardSet | null>(null);
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
 
+  // Navigation Guard Logic
+  const isDirty = (view === 'generate' && (generateText.trim() !== '' || uploadedFile !== null)) || 
+                 (showCreateForm && (setFormData.title.trim() !== '' || flashcardFormData.flashcards.some(c => c.front.trim() !== '' || c.back.trim() !== ''))) ||
+                 (view === 'review');
+
+  // Handle browser-level navigation (refresh, back button, tab close)
+  useBeforeUnload(
+    useCallback(
+      (event: BeforeUnloadEvent) => {
+        if (isDirty) {
+          event.preventDefault();
+        }
+      },
+      [isDirty]
+    )
+  );
+
+  // Handle hardware/browser back button specifically for SPAs
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      if (isDirty) {
+        if (!window.confirm('You have unsaved changes or an active session. Are you sure you want to leave?')) {
+          // Push the current state again to "undo" the back navigation
+          window.history.pushState(null, '', window.location.pathname);
+        }
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [isDirty]);
+
+  // Handle intra-app navigation (manual buttons)
+  const handleNavWithGuard = (targetMode: string, targetView: string) => {
+    if (isDirty) {
+      if (window.confirm('You have unsaved changes or an active session. Are you sure you want to leave?')) {
+        // Clear state and navigate
+        if (targetMode === 'select') {
+          setMode('select');
+          setView('sets');
+          setCurrentSet(null);
+        } else {
+          setMode(targetMode as any);
+          setView(targetView);
+        }
+      }
+    } else {
+      if (targetMode === 'select') {
+        setMode('select');
+        setView('sets');
+        setCurrentSet(null);
+      } else {
+        setMode(targetMode as any);
+        setView(targetView);
+      }
+    }
+  };
+
   // Mode switching functions
   const handleSelectMode = (selectedMode: 'manual' | 'generated' | 'browse') => {
     setMode(selectedMode);
@@ -417,10 +483,7 @@ export const FlashcardPage: React.FC = () => {
   };
 
   const handleSwitchMode = () => {
-    setMode('select');
-    setView('sets');
-    setCurrentSet(null);
-    navigate('/flashcards');
+    handleNavWithGuard('select', 'sets');
   };
 
   const [setFormData, setSetFormData] = useState({
@@ -459,17 +522,101 @@ export const FlashcardPage: React.FC = () => {
   const loadSets = async () => {
     setLoading(true);
     try {
+      if (!navigator.onLine) {
+        console.log('FlashcardPage: Offline detected, loading sets from IndexedDB...');
+        const currentUserId = user?._id || user?.id;
+        let offlineSets = [];
+        
+        if (currentUserId) {
+          offlineSets = await getFlashcardSetsByUser(currentUserId);
+        }
+        
+        if (!offlineSets || offlineSets.length === 0) {
+          console.log('No user-specific sets, getting all...');
+          offlineSets = await getAllFlashcardSets();
+        }
+        
+        if (offlineSets && offlineSets.length > 0) {
+          setSets(offlineSets);
+          setError(null);
+        } else {
+          setSets([]);
+          setError('You are offline and have no saved flashcard sets.');
+        }
+        return;
+      }
+
       const response = await flashcardSetsAPI.getUserSets();
       setSets(response.data.sets);
     } catch (error: any) {
-      setError(error.message);
+      console.warn('loadSets failed, trying offline fallback:', error.message);
+      // Fallback
+      const currentUserId = user?._id || user?.id;
+      let offlineSets = [];
+      if (currentUserId) offlineSets = await getFlashcardSetsByUser(currentUserId);
+      if (!offlineSets || offlineSets.length === 0) offlineSets = await getAllFlashcardSets();
+      
+      if (offlineSets && offlineSets.length > 0) {
+        setSets(offlineSets);
+        setError(null);
+      } else {
+        setError('Network error and no saved data found.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  // 📡 Connectivity change watcher
+  useEffect(() => {
+    const handleStatus = () => {
+      console.log('FlashcardPage: Connectivity changed, reloading...');
+      if (view === 'sets' || mode === 'select') {
+        loadSets();
+      } else if (setId) {
+        fetchFlashcards(setId);
+      }
+    };
+    window.addEventListener('online', handleStatus);
+    window.addEventListener('offline', handleStatus);
+    return () => {
+      window.removeEventListener('online', handleStatus);
+      window.removeEventListener('offline', handleStatus);
+    };
+  }, [view, mode, setId, user?._id]);
+
   const fetchFlashcards = async (setIdParam?: string) => {
     setLoading(true);
+    setError(null);
+    
+    // Check offline status immediately
+    if (!navigator.onLine) {
+      console.log('Detected offline status, loading cards from storage...');
+      const targetSetId = setIdParam || setId;
+      if (targetSetId) {
+        try {
+          // SPEED OPTIMIZATION: Load everything in a single database transaction
+          const { set: offlineSet, cards: offlineCards } = await getFullSetOffline(targetSetId);
+
+          if (offlineSet) setCurrentSet(offlineSet);
+          
+          if (offlineCards && offlineCards.length > 0) {
+            console.log(`Successfully loaded ${offlineCards.length} cards from offline transaction`);
+            setFlashcards(offlineCards);
+            setDueCards(offlineCards);
+          } else {
+            setError('This set is not available offline. Please connect to the internet.');
+          }
+        } catch (offlineErr) {
+          console.error('Offline fetch error:', offlineErr);
+          setError('Failed to load cards from offline storage.');
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+    }
+
     try {
       // If we have a setId, load the set information
       const targetSetId = setIdParam || setId;
@@ -480,17 +627,43 @@ export const FlashcardPage: React.FC = () => {
           const currentSetData = setsResponse.data.sets.find((s: any) => s._id === targetSetId);
           setCurrentSet(currentSetData);
         } catch (setError) {
-          console.error('Failed to load set:', setError);
+          console.warn('Failed to load set from network, tring offline:', setError);
+          const offlineSet = await getFlashcardSet(targetSetId);
+          if (offlineSet) setCurrentSet(offlineSet);
         }
       }
 
-      // Load flashcards
-      const response = await flashcardAPI.getDueCards(50, targetSetId || undefined);
-      setDueCards(response.data.flashcards);
-      const allCardsResponse = await flashcardAPI.getUserCards(100, targetSetId || undefined);
+      // Load flashcards from network - parallelize for performance
+      const [dueResponse, allCardsResponse] = await Promise.all([
+        flashcardAPI.getDueCards(50, targetSetId || undefined),
+        flashcardAPI.getUserCards(100, targetSetId || undefined)
+      ]);
+
+      setDueCards(dueResponse.data.flashcards);
       setFlashcards(allCardsResponse.data.flashcards);
     } catch (error: any) {
-      setError(error.message);
+      console.warn('Failed to fetch cards via network, using offline storage:', error.message);
+      
+      // Fallback to offline
+      const targetSetId = setIdParam || setId;
+      if (targetSetId) {
+        try {
+          const offlineCards = await getFlashcardsBySet(targetSetId);
+          if (offlineCards && offlineCards.length > 0) {
+            console.log(`Loaded ${offlineCards.length} cards offline`);
+            setFlashcards(offlineCards);
+            setDueCards(offlineCards); // Simplify for offline: all cards are "due"
+            setError(null); // Clear network error if we found offline data
+          } else {
+            setError('You are offline and this set has not been saved for offline use.');
+          }
+        } catch (offlineErr: any) {
+          console.error('Offline fetch failed:', offlineErr);
+          setError('Offline storage error.');
+        }
+      } else {
+        setError('You are offline. Please reconnect to view flashcards.');
+      }
     } finally {
       setLoading(false);
     }
@@ -612,7 +785,11 @@ export const FlashcardPage: React.FC = () => {
           await gamificationAPI.awardXP({
             activityType: 'FLASHCARD_COMPLETE',
             xpAmount: 5,
-            description: `Completed flashcard review session (${dueCards.length} cards)`
+            metadata: {
+              flashcardSetName: currentSet?.title || 'Study Session',
+              cardsReviewed: dueCards.length,
+              description: `Completed flashcard review session (${dueCards.length} cards)`
+            }
           });
           // Refresh user stats in auth store
           await refreshUserStats();
@@ -843,10 +1020,7 @@ export const FlashcardPage: React.FC = () => {
           {currentSet ? (
             <div className="flex items-center gap-3 mb-4">
               <button
-                onClick={() => {
-                  setView('sets');
-                  navigate('/flashcards');
-                }}
+                onClick={() => handleNavWithGuard(mode, 'sets')}
                 className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                 title="Back to sets"
               >
@@ -1001,7 +1175,7 @@ export const FlashcardPage: React.FC = () => {
               uploadedFile={uploadedFile}
               setUploadedFile={setUploadedFile}
               onGenerate={handleGenerate}
-              onBack={() => setView('sets')}
+              onBack={() => handleNavWithGuard('generated', 'sets')}
             />
           ) : view === 'browse' ? (
             <FlashcardBrowseView
@@ -1214,10 +1388,19 @@ export const FlashcardPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      setShowCreateForm(false);
-                      setEditingSet(null);
-                      setSetFormData({ title: '', description: '', subject: '', isPublic: false, tags: '' });
-                      setFlashcardFormData({ flashcards: [{ front: '', back: '', difficulty: 'medium', tags: '' }] });
+                      if (isDirty) {
+                        if (window.confirm('You have unsaved changes. Are you sure you want to cancel?')) {
+                          setShowCreateForm(false);
+                          setEditingSet(null);
+                          setSetFormData({ title: '', description: '', subject: '', isPublic: false, tags: '' });
+                          setFlashcardFormData({ flashcards: [{ front: '', back: '', difficulty: 'medium', tags: '' }] });
+                        }
+                      } else {
+                        setShowCreateForm(false);
+                        setEditingSet(null);
+                        setSetFormData({ title: '', description: '', subject: '', isPublic: false, tags: '' });
+                        setFlashcardFormData({ flashcards: [{ front: '', back: '', difficulty: 'medium', tags: '' }] });
+                      }
                     }}
                     className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
                   >

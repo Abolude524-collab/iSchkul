@@ -2,8 +2,11 @@ export interface Question {
   _id?: string;
   id?: string;
   text: string;
+  type?: 'mcq_single' | 'mcq_multiple' | 'true_false';
   options: string[];
-  correctAnswer: number;
+  correctAnswer?: number;
+  correctAnswers?: number[];
+  correctAnswerBoolean?: boolean;
   explanation?: string;
   imageUrl?: string;
 }

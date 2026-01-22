@@ -38,7 +38,11 @@ router.get('/due', auth, async (req, res) => {
 
     let query = { userId: new ObjectId(req.userId) };
     if (groupId) {
-      query.setId = new ObjectId(groupId);
+      if (ObjectId.isValid(groupId)) {
+        query.setId = new ObjectId(groupId);
+      } else {
+        console.warn(`[flashcards/due] Invalid groupId: ${groupId}`);
+      }
     }
 
     const now = new Date();
@@ -71,8 +75,8 @@ router.post('/review', auth, async (req, res) => {
   try {
     const { flashcardId, quality } = req.body;
 
-    if (!flashcardId || quality === undefined) {
-      return res.status(400).json({ error: 'Flashcard ID and quality are required' });
+    if (!flashcardId || !ObjectId.isValid(flashcardId) || quality === undefined) {
+      return res.status(400).json({ error: 'Valid Flashcard ID and quality are required' });
     }
 
     const client = new MongoClient(process.env.MONGODB_URI || 'mongodb://localhost:27017/ischkul');
@@ -398,7 +402,11 @@ router.get('/', auth, async (req, res) => {
 
     let query = { userId: new ObjectId(req.userId) };
     if (groupId) {
-      query.setId = new ObjectId(groupId);
+      if (ObjectId.isValid(groupId)) {
+        query.setId = new ObjectId(groupId);
+      } else {
+        console.warn(`[flashcards/list] Invalid groupId: ${groupId}`);
+      }
     }
 
     const flashcards = await cardsCollection

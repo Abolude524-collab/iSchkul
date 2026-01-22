@@ -50,6 +50,22 @@ const educatorRoleMap = {
   'Other': 'a versatile educator adapting to the learner\'s level'
 };
 
+// Helper function to determine educator role based on student category
+function getEducatorRole(studentCategory) {
+  if (educatorRoleMap[studentCategory]) {
+    return educatorRoleMap[studentCategory];
+  }
+  const fallbackMap = {
+    'Undergraduate': educatorRoleMap['University Student'],
+    'Postgraduate': educatorRoleMap['Postgraduate Student'],
+    'High School': educatorRoleMap['Secondary School Student'],
+    'Secondary': educatorRoleMap['Secondary School Student'],
+    'Primary': 'a friendly elementary school teacher who uses simple language and encouraging tone',
+    'Professional': 'a professional industry certifier'
+  };
+  return fallbackMap[studentCategory] || educatorRoleMap['Other'];
+}
+
 
 // Difficulty level definitions and guidelines
 const difficultyGuidelines = {
@@ -79,11 +95,6 @@ const difficultyGuidelines = {
   }
 };
 
-// Helper function to get educator role based on student category
-function getEducatorRole(studentCategory) {
-  return educatorRoleMap[studentCategory] || educatorRoleMap['Other'];
-}
-
 // Helper function to build prompt with subject-specific requirements
 function buildQuizPrompt(numQuestions, difficulty, contentText, subject, studentCategory, educatorRole) {
   const diffGuideline = difficultyGuidelines[difficulty] || difficultyGuidelines['medium'];
@@ -104,7 +115,11 @@ SPECIAL INSTRUCTIONS FOR ${subject.toUpperCase()}:
 
   const prompt = `You are ${educatorRole}.
 
-Generate ${numQuestions} high-quality multiple-choice questions (MCQs) based on the study material provided.
+Generate ${numQuestions} high-quality questions based on the study material provided.
+Provide a diverse mix of the following three question types:
+1. mcq_single: Traditional multiple-choice with ONE correct answer.
+2. mcq_multiple: Multiple-choice where MORE THAN ONE answer can be correct (provide correctAnswers as an array of indices).
+3. true_false: A statement that is either True or False.
 
 DIFFICULTY LEVEL: ${diffGuideline.label.toUpperCase()}
 Description: ${diffGuideline.description}
@@ -115,29 +130,34 @@ TEXT SOURCE (Study Material):
 ${contentText.substring(0, 3000)}
 
 REQUIREMENTS:
-- Each question must have exactly 4 options (A, B, C, D)
-- Questions should be directly relevant to the provided content
-- Include a clear explanation for each correct answer that references the source material
-- Difficulty should match the specified level
-
-STRICT CONSTRAINTS - DO NOT ASK QUESTIONS ABOUT:
-- Preface, foreword, or acknowledgements sections
-- Table of contents, indexes, or references
-- Learning outcomes, aims, objectives, or overview statements
-- "About the Author" or editor biographical sections
-- Copyright notices or publication metadata
-- Administrative or metadata sections of the document
-
-FOCUS ONLY on the main content and core study material.${subjectSpecificInstructions}
+- For mcq_single and mcq_multiple, provide exactly 4 options.
+- For true_false, do NOT provide an options array.
+- Questions should be directly relevant to the provided content.
+- Include a clear explanation for each correct answer that references the source material.
+- Difficulty should match the specified level.
 
 Return ONLY valid JSON in this exact format with no additional text or markdown:
 {
   "questions": [
     {
-      "text": "Clear, specific question about the content?",
-      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "type": "mcq_single",
+      "text": "Question text?",
+      "options": ["Option 1", "Option 2", "Option 3", "Option 4"],
       "correctAnswer": 0,
-      "explanation": "Brief explanation of why this answer is correct, referencing the source material"
+      "explanation": "Explanation here"
+    },
+    {
+      "type": "mcq_multiple",
+      "text": "Which of these apply?",
+      "options": ["Applies", "Does not", "Applies too", "Does not"],
+      "correctAnswers": [0, 2],
+      "explanation": "Explanation here"
+    },
+    {
+      "type": "true_false",
+      "text": "The earth is flat.",
+      "correctAnswerBoolean": false,
+      "explanation": "Explanation here"
     }
   ]
 }`;
@@ -278,6 +298,7 @@ router.post('/quiz', auth, async (req, res) => {
       // Content-aware question templates adapted to difficulty
       const easyTemplates = [
         {
+          type: 'mcq_single',
           text: `What is ${keywords[0] || topic || 'this concept'}?`,
           options: [
             keyPhrases[0] || 'A fundamental concept',
@@ -289,31 +310,28 @@ router.post('/quiz', auth, async (req, res) => {
           explanation: `The text defines ${keywords[0] || 'this'} as: ${keyPhrases[0] || 'a key concept'}`
         },
         {
-          text: `According to the content, what is mentioned about ${keywords[1] || topic}?`,
-          options: [
-            keyPhrases[2] || 'It is important',
-            'It is irrelevant',
-            'It is outdated',
-            'It is controversial'
-          ],
-          correctAnswer: 0,
-          explanation: 'This information is directly stated in the provided text.'
+          type: 'true_false',
+          text: `The material primarily focuses on ${keywords[0] || topic}.`,
+          correctAnswerBoolean: true,
+          explanation: `The core subject of the source material is indeed ${keywords[0] || topic}.`
         }
       ];
 
       const mediumTemplates = [
         {
-          text: `How does the content describe the relationship between ${keywords[0] || topic} and ${keywords[1] || 'related concepts'}?`,
+          type: 'mcq_multiple',
+          text: `Which of the following are mentioned in relation to ${keywords[0] || topic}?`,
           options: [
-            'They are interconnected',
-            'They are completely separate',
-            'They oppose each other',
-            'No relationship exists'
+            keyPhrases[0] || 'Key concept A',
+            'An unrelated distraction',
+            keyPhrases[1] || 'Key concept B',
+            'A random irrelevant term'
           ],
-          correctAnswer: 0,
-          explanation: 'The text indicates these concepts are related and build upon each other.'
+          correctAnswers: [0, 2],
+          explanation: 'The text specifically mentions both concepts as relevant factors.'
         },
         {
+          type: 'mcq_single',
           text: `What approach does the material suggest for ${keywords[0] || topic}?`,
           options: [
             'Systematic understanding',
@@ -328,17 +346,13 @@ router.post('/quiz', auth, async (req, res) => {
 
       const hardTemplates = [
         {
-          text: `Analyze the implications of ${keywords[0] || topic} in the context presented. What conclusion is most supported?`,
-          options: [
-            'It requires critical evaluation and synthesis',
-            'It is straightforward to implement',
-            'It has no practical application',
-            'It contradicts established principles'
-          ],
-          correctAnswer: 0,
-          explanation: 'The text suggests complex relationships requiring analytical thinking.'
+          type: 'true_false',
+          text: `Based on the content, ${keywords[0] || topic} can be implemented without any prior knowledge.`,
+          correctAnswerBoolean: false,
+          explanation: 'The complexity described in the material indicates that prerequisite knowledge is required.'
         },
         {
+          type: 'mcq_single',
           text: `Evaluate how ${keywords[0] || topic} relates to ${keywords[1] || 'broader concepts'}. Which interpretation is most accurate?`,
           options: [
             'They form an integrated framework',
@@ -353,6 +367,7 @@ router.post('/quiz', auth, async (req, res) => {
 
       const veryHardTemplates = [
         {
+          type: 'mcq_single',
           text: `Synthesize the advanced concepts discussed regarding ${keywords[0] || topic}. Which theoretical framework best explains the relationships?`,
           options: [
             'A multidimensional integrative model',
@@ -382,17 +397,43 @@ router.post('/quiz', auth, async (req, res) => {
         for (let i = 0; i < Math.min(numQuestions, sentences.length); i++) {
           const sentence = sentences[i].trim();
           if (sentence.length > 30) {
-            templates.push({
-              text: `Based on the text, which statement is accurate about the content?`,
-              options: [
-                sentence.substring(0, 100),
-                sentences[(i + 1) % sentences.length]?.substring(0, 100) || 'Alternative statement',
-                sentences[(i + 2) % sentences.length]?.substring(0, 100) || 'Different concept',
-                'None of these are mentioned'
-              ],
-              correctAnswer: 0,
-              explanation: `This is directly stated in the source material: "${sentence.substring(0, 150)}..."`
-            });
+            // Randomly pick a question type for the sentence-based question
+            const typeValue = Math.random();
+            
+            if (typeValue < 0.2) { // 20% True/False
+              templates.push({
+                type: 'true_false',
+                text: `According to the text, is the following statement true: "${sentence.substring(0, 100)}..."?`,
+                correctAnswerBoolean: true,
+                explanation: `This is directly stated in the material: "${sentence.substring(0, 150)}..."`
+              });
+            } else if (typeValue < 0.4) { // 20% Multiple Choice (Multiple Answers)
+              templates.push({
+                type: 'mcq_multiple',
+                text: `Which of these statements accurately reflects the material's discussion of "${sentence.substring(0, 40)}..."?`,
+                options: [
+                  sentence.substring(0, 100),
+                  sentences[(i + 1) % sentences.length]?.substring(0, 100) || 'Alternative concept',
+                  sentence.substring(0, 80) + ' (confirmed)',
+                  'This is not mentioned in the text'
+                ],
+                correctAnswers: [0, 2],
+                explanation: `The material explicitly states: "${sentence.substring(0, 150)}..."`
+              });
+            } else { // 60% standard MCQ
+              templates.push({
+                type: 'mcq_single',
+                text: `Based on the text, which statement is accurate about the content?`,
+                options: [
+                  sentence.substring(0, 100),
+                  sentences[(i + 1) % sentences.length]?.substring(0, 100) || 'Alternative statement',
+                  sentences[(i + 2) % sentences.length]?.substring(0, 100) || 'Different concept',
+                  'None of these are mentioned'
+                ],
+                correctAnswer: 0,
+                explanation: `This is directly stated in the source material: "${sentence.substring(0, 150)}..."`
+              });
+            }
           }
         }
       }
@@ -421,23 +462,25 @@ router.post('/quiz', auth, async (req, res) => {
       generationNote: contentText ? 'Content-based questions (AI unavailable)' : 'General knowledge questions'
     };
 
-    // If OpenAI API key is available, use it
+    // AI Generation Logic
+    let studentCategory = 'Other';
+    try {
+      const user = await User.findById(req.user._id);
+      if (user && user.studentCategory) {
+        studentCategory = user.studentCategory;
+        console.log('Retrieved student category:', studentCategory);
+      }
+    } catch (userError) {
+      console.warn('Could not fetch student category, using default:', userError.message);
+    }
+
+    let aiGenerated = false;
+
+    // Try OpenAI first if available
     if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim() !== '') {
       try {
-        console.log('OpenAI API key found, length:', process.env.OPENAI_API_KEY.length);
+        console.log('OpenAI API key found, attempting generation...');
         console.log('Attempting AI quiz generation for content length:', contentText.length);
-
-        // Fetch user category from database
-        let studentCategory = 'Other';
-        try {
-          const user = await User.findById(req.user._id);
-          if (user && user.studentCategory) {
-            studentCategory = user.studentCategory;
-            console.log('Retrieved student category:', studentCategory);
-          }
-        } catch (userError) {
-          console.warn('Could not fetch student category, using default:', userError.message);
-        }
 
         // Get educator role based on student category
         const educatorRole = getEducatorRole(studentCategory);
@@ -471,181 +514,107 @@ router.post('/quiz', auth, async (req, res) => {
           timeout: 60000 // 60 second timeout
         });
 
-        console.log('OpenAI API response status:', response.status);
         const aiResponse = response.data.choices[0].message.content.trim();
-        console.log('Raw AI Response length:', aiResponse.length);
-
-        // Try to extract JSON from the response
         let jsonStart = aiResponse.indexOf('{');
         let jsonEnd = aiResponse.lastIndexOf('}') + 1;
 
-        if (jsonStart === -1 || jsonEnd === 0) {
-          console.log('No JSON brackets found in response');
-          throw new Error('No JSON found in AI response');
-        }
+        if (jsonStart !== -1 && jsonEnd > 0) {
+          const jsonString = aiResponse.substring(jsonStart, jsonEnd);
+          const generatedContent = JSON.parse(jsonString);
 
-        const jsonString = aiResponse.substring(jsonStart, jsonEnd);
-        console.log('Extracted JSON string length:', jsonString.length);
+          if (generatedContent.questions && Array.isArray(generatedContent.questions)) {
+            const validQuestions = generatedContent.questions.filter(q => {
+              const type = q.type || 'mcq_single';
+              if (type === 'mcq_single') return Array.isArray(q.options) && q.options.length >= 2 && typeof q.correctAnswer === 'number';
+              if (type === 'mcq_multiple') return Array.isArray(q.options) && q.options.length >= 2 && Array.isArray(q.correctAnswers) && q.correctAnswers.length > 0;
+              if (type === 'true_false') return typeof q.correctAnswerBoolean === 'boolean';
+              return false;
+            });
 
-        const generatedContent = JSON.parse(jsonString);
-        console.log('Parsed JSON successfully');
-
-        if (generatedContent.questions && Array.isArray(generatedContent.questions)) {
-          console.log('Found questions array with length:', generatedContent.questions.length);
-
-          // Validate the structure and content relevance
-          const validQuestions = generatedContent.questions.filter(q => {
-            // Check for either 'text' or 'question' field for backward compatibility
-            const questionText = q.text || q.question;
-            return questionText &&
-              questionText.length > 10 &&
-              Array.isArray(q.options) &&
-              q.options.length === 4 &&
-              typeof q.correctAnswer === 'number' &&
-              q.correctAnswer >= 0 && q.correctAnswer < 4 &&
-              q.explanation &&
-              q.explanation.length > 10;
-          });
-
-          console.log('Valid questions found:', validQuestions.length);
-
-          if (validQuestions.length >= Math.min(3, parseInt(numQuestions) || 5)) {
-            // Normalize to use 'text' field
-            mockQuiz.questions = validQuestions.slice(0, parseInt(numQuestions) || 5).map(q => ({
-              text: q.text || q.question,
-              options: q.options,
-              correctAnswer: q.correctAnswer,
-              explanation: q.explanation
-            }));
-            mockQuiz.isAIGenerated = true;
-            mockQuiz.difficulty = difficulty;
-            mockQuiz.timeLimit = timeLimit;
-            mockQuiz.generationNote = 'AI-generated questions based on provided content';
-            console.log(`Successfully generated ${mockQuiz.questions.length} AI questions`);
-          } else {
-            console.log('Not enough valid questions from AI, using enhanced mock questions');
-            throw new Error('AI generated insufficient valid questions');
-          }
-        } else {
-          throw new Error('AI response missing questions array');
-        }
-      } catch (aiError) {
-        console.log('OpenAI generation failed:', aiError.message);
-        if (aiError.response) {
-          console.log('OpenAI API error response:', aiError.response.status, aiError.response.data);
-        } else if (aiError.code === 'ECONNABORTED') {
-          console.log('OpenAI API request timed out');
-        }
-
-        // Try Gemini as fallback
-        if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() !== '') {
-          try {
-            console.log('Attempting Gemini AI fallback...');
-            const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-            const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-
-            // Reuse educator role and student category from OpenAI attempt
-            const educatorRole = getEducatorRole(studentCategory);
-            const geminiPrompt = buildQuizPrompt(
-              numQuestions || 5,
-              difficulty,
-              contentText,
-              subject,
-              studentCategory,
-              educatorRole
-            );
-
-            const result = await model.generateContent(geminiPrompt);
-            const response = await result.response;
-            let geminiText = response.text();
-
-            console.log('Gemini response received, length:', geminiText.length);
-            console.log('Gemini raw response (first 500 chars):', geminiText.substring(0, 500));
-
-            // Clean up markdown if present
-            geminiText = geminiText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-
-            // Extract JSON
-            let jsonStart = geminiText.indexOf('{');
-            let jsonEnd = geminiText.lastIndexOf('}') + 1;
-
-            if (jsonStart !== -1 && jsonEnd > 0) {
-              const jsonString = geminiText.substring(jsonStart, jsonEnd);
-              console.log('Extracted JSON string (first 300 chars):', jsonString.substring(0, 300));
-
-              const geminiContent = JSON.parse(jsonString);
-              console.log('Parsed Gemini content, has questions array:', !!geminiContent.questions);
-
-              if (geminiContent.questions && Array.isArray(geminiContent.questions)) {
-                console.log('Number of questions in response:', geminiContent.questions.length);
-                console.log('First question sample:', JSON.stringify(geminiContent.questions[0], null, 2));
-
-                const validQuestions = geminiContent.questions.filter(q => {
-                  // Check for either 'text' or 'question' field for backward compatibility
-                  const questionText = q.text || q.question;
-                  return questionText &&
-                    questionText.length > 10 &&
-                    Array.isArray(q.options) &&
-                    q.options.length === 4 &&
-                    typeof q.correctAnswer === 'number' &&
-                    q.correctAnswer >= 0 && q.correctAnswer < 4 &&
-                    q.explanation &&
-                    q.explanation.length > 10;
-                });
-
-                console.log('Valid questions after filtering:', validQuestions.length);
-
-                if (validQuestions.length >= Math.min(3, parseInt(numQuestions) || 5)) {
-                  // Normalize to use 'text' field
-                  mockQuiz.questions = validQuestions.slice(0, parseInt(numQuestions) || 5).map(q => ({
-                    text: q.text || q.question,
-                    options: q.options,
-                    correctAnswer: q.correctAnswer,
-                    explanation: q.explanation
-                  }));
-                  mockQuiz.isAIGenerated = true;
-                  mockQuiz.difficulty = difficulty;
-                  mockQuiz.timeLimit = timeLimit;
-                  mockQuiz.generationNote = 'Gemini AI-generated questions';
-                  console.log(`Successfully generated ${mockQuiz.questions.length} Gemini questions`);
-                  // Continue to database save at the end - do NOT return early
-                } else {
-                  console.log(`Not enough valid questions. Need at least ${Math.min(3, parseInt(numQuestions) || 5)}, got ${validQuestions.length}`);
-                }
-              }
+            if (validQuestions.length >= Math.min(3, parseInt(numQuestions) || 5)) {
+              mockQuiz.questions = validQuestions.slice(0, parseInt(numQuestions) || 5).map(q => {
+                const type = q.type || 'mcq_single';
+                const base = { text: q.text || q.question, type, explanation: q.explanation || 'Refer to source.' };
+                if (type === 'mcq_single') return { ...base, options: q.options, correctAnswer: q.correctAnswer };
+                if (type === 'mcq_multiple') return { ...base, options: q.options, correctAnswers: q.correctAnswers };
+                if (type === 'true_false') return { ...base, correctAnswerBoolean: q.correctAnswerBoolean };
+                return base;
+              });
+              mockQuiz.isAIGenerated = true;
+              mockQuiz.generationNote = 'OpenAI generated mixed questions';
+              aiGenerated = true;
+              console.log('Successfully generated questions with OpenAI');
             }
-
-            console.log('Gemini response did not contain valid questions, using fallback');
-          } catch (geminiError) {
-            console.log('Gemini fallback also failed:', geminiError.message);
           }
-        } else {
-          console.log('No Gemini API key configured');
         }
-
-        console.log('Using content-based fallback questions');
-
-        // Enhance mock quiz with content analysis
-        if (contentText) {
-          // Use subject name for title instead of content excerpt
-          mockQuiz.title = `${subject || 'Content-Based'} Quiz`;
-          mockQuiz.description = `Quiz generated from provided content (${contentText.length} characters)`;
-
-          // Extract simple keywords from content to use as topics
-          const stopwords = new Set([
-            'that', 'with', 'from', 'this', 'they', 'have', 'been', 'were', 'will', 'would', 'could', 'should',
-            'their', 'there', 'these', 'those', 'into', 'about', 'after', 'before', 'because', 'while', 'where',
-            'which', 'when', 'what', 'your', 'ours', 'mine', 'them', 'then', 'than', 'also', 'such', 'many', 'much'
-          ]);
-          const words = (contentText.toLowerCase().match(/[a-z]{4,}/g) || []).filter(w => !stopwords.has(w));
-          const freq = {};
-          for (const w of words) freq[w] = (freq[w] || 0) + 1;
-          const topKeywords = Object.keys(freq).sort((a, b) => freq[b] - freq[a]).slice(0, 3);
-          mockQuiz.topics = topKeywords.length > 0 ? topKeywords : [subject || 'Content Analysis'];
-        }
+      } catch (err) {
+        console.log('OpenAI generation failed:', err.message);
       }
-    } else {
-      console.log('No OpenAI API key configured, using enhanced mock data');
+    }
+
+    // If OpenAI failed or wasn't available, try Gemini
+    if (!aiGenerated && process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() !== '') {
+      try {
+        console.log('Attempting Gemini AI fallback/alternative...');
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' }); // Updated to 2.5-flash for 2026 stable version
+
+        const educatorRole = getEducatorRole(studentCategory);
+        const prompt = buildQuizPrompt(numQuestions || 5, difficulty, contentText, subject, studentCategory, educatorRole);
+
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        let geminiText = response.text().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+        let jsonStart = geminiText.indexOf('{');
+        let jsonEnd = geminiText.lastIndexOf('}') + 1;
+
+        if (jsonStart !== -1 && jsonEnd > 0) {
+          const geminiContent = JSON.parse(geminiText.substring(jsonStart, jsonEnd));
+          if (geminiContent.questions && Array.isArray(geminiContent.questions)) {
+            const validQuestions = geminiContent.questions.filter(q => {
+              const type = q.type || 'mcq_single';
+              if (type === 'mcq_single') return Array.isArray(q.options) && q.options.length >= 2 && typeof q.correctAnswer === 'number';
+              if (type === 'mcq_multiple') return Array.isArray(q.options) && q.options.length >= 2 && Array.isArray(q.correctAnswers) && q.correctAnswers.length > 0;
+              if (type === 'true_false') return typeof q.correctAnswerBoolean === 'boolean';
+              return false;
+            });
+
+            if (validQuestions.length >= Math.min(3, parseInt(numQuestions) || 5)) {
+              mockQuiz.questions = validQuestions.slice(0, parseInt(numQuestions) || 5).map(q => {
+                const type = q.type || 'mcq_single';
+                const base = { text: q.text || q.question, type, explanation: q.explanation || 'Refer to source.' };
+                if (type === 'mcq_single') return { ...base, options: q.options, correctAnswer: q.correctAnswer };
+                if (type === 'mcq_multiple') return { ...base, options: q.options, correctAnswers: q.correctAnswers };
+                if (type === 'true_false') return { ...base, correctAnswerBoolean: q.correctAnswerBoolean };
+                return base;
+              });
+              mockQuiz.isAIGenerated = true;
+              mockQuiz.generationNote = 'Gemini AI generated mixed questions';
+              aiGenerated = true;
+              console.log('Successfully generated questions with Gemini');
+            }
+          }
+        }
+      } catch (err) {
+        console.log('Gemini generation failed:', err.message);
+      }
+    }
+
+    // Final fallback to content-aware mock questions if all AI failed
+    if (!aiGenerated) {
+      console.log('All AI generation failed, using content-based fallback');
+      if (contentText) {
+        mockQuiz.title = `${subject || 'Content-Based'} Quiz`;
+        mockQuiz.description = `Quiz generated from provided content (${contentText.length} characters)`;
+
+        const stopwords = new Set(['that', 'with', 'from', 'this', 'they', 'have', 'been', 'were', 'will', 'would', 'could', 'should', 'their', 'there', 'these', 'those']);
+        const words = (contentText.toLowerCase().match(/[a-z]{4,}/g) || []).filter(w => !stopwords.has(w));
+        const freq = {};
+        for (const w of words) freq[w] = (freq[w] || 0) + 1;
+        const topKeywords = Object.keys(freq).sort((a, b) => freq[b] - freq[a]).slice(0, 3);
+        mockQuiz.topics = topKeywords.length > 0 ? topKeywords : [subject || 'Content Analysis'];
+      }
     }
 
     // Generate unique title if content based

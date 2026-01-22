@@ -176,12 +176,12 @@ async function awardXp(userId, activityType, xpAmount, metadata = {}) {
     // Update user's total XP
     const user = await User.findByIdAndUpdate(
       userId,
-      { $inc: { xp: xpAmount } },
+      { $inc: { xp: xpAmount, total_xp: xpAmount } },
       { new: true }
     );
 
-    // Calculate new level (simple formula: level = floor(sqrt(xp/100)))
-    const newLevel = Math.floor(Math.sqrt(user.xp / 100)) + 1;
+    // Calculate new level (linear formula: level = floor(xp/100) + 1)
+    const newLevel = Math.floor(user.xp / 100) + 1;
     if (newLevel > user.level) {
       await User.findByIdAndUpdate(userId, { level: newLevel });
     }

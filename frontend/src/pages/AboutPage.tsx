@@ -30,10 +30,10 @@ export const AboutPage: React.FC = () => {
   ];
 
   const technologies = [
-    { name: 'AI Architecture', role: 'Azure OpenAI, GPT-4o' },
-    { name: 'Data Management', role: 'Cosmos DB, Azure AI Search' },
-    { name: 'Real-Time Features', role: 'Web PubSub, SignalR' },
-    { name: 'Infrastructure', role: 'Azure Functions, Static Web Apps' },
+    { name: 'AI Architecture', role: 'OpenAI GPT-4o' },
+    { name: 'Data Management', role: 'MongoDB'},
+    { name: 'Real-Time Features', role: 'WebSocket' },
+    { name: 'Infrastructure', role: 'Express and Node.js Static Web Apps' },
   ];
 
   const team = [
@@ -270,22 +270,22 @@ export const AboutPage: React.FC = () => {
       {/* Imagine Cup 2026 */}
       <section className="py-16 md:py-24 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">Built for Imagine Cup 2026</h2>
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">iSchkul – Smart Learning Made Simple</h2>
           <p className="text-lg text-blue-100 mb-8">
-            ischkul meets all competition criteria: ≥2 Microsoft AI services, serverless architecture, responsible AI, and comprehensive documentation.
+            Built to deliver intelligent quizzes, content generation, and semantic search with scalable serverless architecture and comprehensive documentation.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
             <div className="bg-blue-700 bg-opacity-50 p-6 rounded-lg backdrop-blur-sm">
-              <p className="font-semibold mb-2">Azure OpenAI</p>
+              <p className="font-semibold mb-2">AI-Powered Quiz & Content Generation</p>
               <p className="text-blue-100 text-sm">GPT-4o for quiz and content generation</p>
             </div>
             <div className="bg-blue-700 bg-opacity-50 p-6 rounded-lg backdrop-blur-sm">
-              <p className="font-semibold mb-2">Azure AI Search</p>
+              <p className="font-semibold mb-2">Semantic Search</p>
               <p className="text-blue-100 text-sm">Vector embeddings for semantic retrieval</p>
             </div>
             <div className="bg-blue-700 bg-opacity-50 p-6 rounded-lg backdrop-blur-sm">
-              <p className="font-semibold mb-2">Azure Functions</p>
-              <p className="text-blue-100 text-sm">Serverless compute for scalability</p>
+              <p className="font-semibold mb-2">Serverless Architecture</p>
+              <p className="text-blue-100 text-sm">Scalable and efficient backend</p>
             </div>
           </div>
         </div>

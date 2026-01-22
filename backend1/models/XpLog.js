@@ -34,11 +34,8 @@ const XpLogSchema = new mongoose.Schema({
     required: true
   },
   metadata: {
-    quizId: String,
-    quizScore: Number,
-    flashcardSetId: String,
-    documentId: String,
-    description: String
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
   },
   timestamp: {
     type: Date,

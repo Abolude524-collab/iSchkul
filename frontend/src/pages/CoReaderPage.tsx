@@ -6,6 +6,8 @@ import { PDFCanvas } from '../components/reader/PDFCanvas';
 import { DocxViewer } from '../components/reader/DocxViewer';
 import { ChatInterface } from '../components/reader/ChatInterface';
 import { usePomodoro } from '../hooks/usePomodoro';
+import { getAPIEndpoint } from '../services/api';
+import { saveDocument, getDocumentContent } from '../services/indexedDB';
 
 // Types
 interface Message {
@@ -54,53 +56,63 @@ export const CoReaderPage: React.FC = () => {
                     setIsLoadingDocument(true);
                     const token = localStorage.getItem('authToken');
                     
-                    // Debug logging
-                    console.log('📄 Loading document:', id);
-                    console.log('🔑 Token exists:', !!token);
-                    console.log('🔑 Token length:', token?.length || 0);
-                    console.log('🔑 Token preview:', token ? token.substring(0, 20) + '...' : 'MISSING');
-                    console.log('🔑 Token starts with "eyJ":', token?.startsWith('eyJ'));
-                    
-                    // Fetch document metadata to verify it exists
-                    const response = await fetch(`http://localhost:5000/api/documents/${id}`, {
-                        headers: {
-                            'Authorization': `Bearer ${token}`
-                        }
-                    });
-                    
-                    console.log('📡 Response status:', response.status);
-                    console.log('📡 Response headers:', {
-                        contentType: response.headers.get('content-type'),
-                        contentLength: response.headers.get('content-length')
-                    });
-                    
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        console.error('❌ API Error Response:', errorText);
-                        setDocumentError(`Document not found or you do not have access (${response.status})`);
-                        return;
+                    // 1. Try local cache first
+                    console.log('📦 Checking offline cache for:', id);
+                    const cachedBlob = await getDocumentContent(id);
+                    if (cachedBlob) {
+                        console.log('✅ Found in offline cache');
+                        const localUrl = URL.createObjectURL(cachedBlob);
+                        setFileUrl(localUrl);
+                        // We might still want metadata to know if it's DOCX or PDF
                     }
-                    
-                    const data = await response.json();
-                    console.log('✅ Document metadata received:', data);
-                    
-                    // Determine file type from metadata
-                    const contentType = data.metadata?.contentType || '';
-                    const isDocx = contentType.includes('wordprocessingml.document');
-                    setFileType(isDocx ? 'docx' : 'pdf');
-                    console.log('📋 File type:', isDocx ? 'DOCX' : 'PDF');
-                    
-                    // Use the backend proxy URL to avoid CORS issues
-                    const proxyUrl = `http://localhost:5000/api/documents/${id}/content`;
-                    console.log('📍 Setting proxy URL:', proxyUrl);
-                    setFileUrl(proxyUrl);
+
+                    // 2. If online, fetch metadata and content if needed
+                    if (navigator.onLine) {
+                        console.log('🌐 Online: Syncing document data...');
+                        const response = await fetch(getAPIEndpoint(`/documents/${id}`), {
+                            headers: {
+                                'Authorization': `Bearer ${token}`
+                            }
+                        });
+                        
+                        if (response.ok) {
+                            const data = await response.json();
+                            const docMetadata = data.metadata || data.data?.metadata || data.document || data;
+                            
+                            // Determine file type
+                            const contentType = docMetadata.contentType || '';
+                            const isDocx = contentType.includes('wordprocessingml.document') || docMetadata.filename?.endsWith('.docx');
+                            setFileType(isDocx ? 'docx' : 'pdf');
+
+                            // If not cached, or we want the pure content proxy
+                            if (!cachedBlob) {
+                                console.log('📥 Document not cached, downloading for offline access...');
+                                const contentResponse = await fetch(getAPIEndpoint(`/documents/${id}/content`), {
+                                    headers: { 'Authorization': `Bearer ${token}` }
+                                });
+                                
+                                if (contentResponse.ok) {
+                                    const blob = await contentResponse.blob();
+                                    await saveDocument(docMetadata, blob);
+                                    const localUrl = URL.createObjectURL(blob);
+                                    setFileUrl(localUrl);
+                                    console.log('💾 Document saved to offline storage');
+                                } else {
+                                    // Fallback to proxy URL if download fails but metadata succeeded
+                                    setFileUrl(getAPIEndpoint(`/documents/${id}/content`));
+                                }
+                            }
+                        } else if (!cachedBlob) {
+                            setDocumentError(`Document not found or access denied (${response.status})`);
+                        }
+                    } else if (!cachedBlob) {
+                        setDocumentError('You are offline and this document is not cached for offline viewing.');
+                    }
                 } catch (error: any) {
-                    console.error('🔴 Failed to load document:', {
-                        message: error.message,
-                        stack: error.stack,
-                        error
-                    });
-                    setDocumentError('Failed to load document: ' + error.message);
+                    console.error('🔴 Error loading document:', error);
+                    if (!cachedBlob) {
+                        setDocumentError('Failed to load document: ' + error.message);
+                    }
                 } finally {
                     setIsLoadingDocument(false);
                 }
@@ -108,9 +120,7 @@ export const CoReaderPage: React.FC = () => {
             
             loadDocument();
         } else {
-            // Fallback to demo PDF if no ID provided
-            console.log('ℹ️ No document ID provided, using demo PDF');
-            setFileUrl('http://localhost:5000/api/documents/demo/content');
+            setFileUrl(getAPIEndpoint('/documents/demo/content'));
             setIsLoadingDocument(false);
         }
     }, [id]);

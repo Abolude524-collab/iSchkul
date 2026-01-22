@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload, FileText, Loader, Plus, BookOpen, Clock, Trash2 } from 'lucide-react';
+import { Upload, FileText, Loader, Plus, BookOpen, Clock, Trash2, DownloadCloud, CheckCircle } from 'lucide-react';
 import { Navbar } from '../components/Navbar';
+import { getAPIEndpoint } from '../services/api';
+import { getOfflineDocuments, saveDocument } from '../services/indexedDB';
 
 interface Document {
     _id: string;
@@ -25,18 +27,57 @@ export const CoReaderLibraryPage: React.FC = () => {
 
     const fetchDocuments = async () => {
         try {
+            setLoading(true);
             const token = localStorage.getItem('authToken');
-            const response = await fetch(getAPIEndpoint('/documents'), {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (response.ok) {
-                const data = await response.json();
-                setDocuments(data);
+            
+            // 1. Try local cache first (merge or fallback)
+            const offlineDocs = await getOfflineDocuments();
+            if (offlineDocs.length > 0) {
+                setDocuments(offlineDocs as Document[]);
+            }
+
+            if (navigator.onLine) {
+                const response = await fetch(getAPIEndpoint('/documents'), {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    setDocuments(data);
+                    
+                    // Update cache for metadata (don't download blobs yet)
+                    // This ensures the library list is available offline
+                    for (const doc of data) {
+                        await saveDocument(doc);
+                    }
+                }
             }
         } catch (error) {
             console.error('Failed to fetch documents:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const downloadForOffline = async (doc: Document) => {
+        try {
+            const token = localStorage.getItem('authToken');
+            console.log('📥 Downloading for offline:', doc.title);
+            
+            const contentResponse = await fetch(getAPIEndpoint(`/documents/${doc._id}/content`), {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (contentResponse.ok) {
+                const blob = await contentResponse.blob();
+                await saveDocument(doc, blob);
+                alert(`${doc.title} is now available offline!`);
+            } else {
+                throw new Error('Failed to download content');
+            }
+        } catch (error) {
+            console.error('Download error:', error);
+            alert('Failed to download document for offline use.');
         }
     };
 
@@ -166,14 +207,27 @@ export const CoReaderLibraryPage: React.FC = () => {
                                 </div>
 
                                 <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-50">
-                                    <span className={`text-xs font-medium px-2 py-1 rounded-full ${doc.indexStatus === 'completed'
-                                            ? 'bg-green-100 text-green-700'
-                                            : doc.indexStatus === 'processing'
-                                                ? 'bg-yellow-100 text-yellow-700'
-                                                : 'bg-red-100 text-red-700'
-                                        }`}>
-                                        {doc.indexStatus === 'completed' ? 'Ready' : doc.indexStatus}
-                                    </span>
+                                    <div className="flex items-center gap-2">
+                                        <span className={`text-xs font-medium px-2 py-1 rounded-full ${doc.indexStatus === 'completed'
+                                                ? 'bg-green-100 text-green-700'
+                                                : doc.indexStatus === 'processing'
+                                                    ? 'bg-yellow-100 text-yellow-700'
+                                                    : 'bg-red-100 text-red-700'
+                                            }`}>
+                                            {doc.indexStatus === 'completed' ? 'Ready' : doc.indexStatus}
+                                        </span>
+
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                downloadForOffline(doc);
+                                            }}
+                                            className="p-1 hover:bg-gray-100 rounded text-gray-500 hover:text-purple-600 transition-colors"
+                                            title="Download for offline access"
+                                        >
+                                            <DownloadCloud size={16} />
+                                        </button>
+                                    </div>
 
                                     <button className="text-sm font-medium text-purple-600 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
                                         Read Now <BookOpen size={14} />

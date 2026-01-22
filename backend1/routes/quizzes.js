@@ -18,14 +18,18 @@ router.post('/create', auth, async (req, res) => {
       return res.status(400).json({ error: 'Title and questions are required' });
     }
 
-    // Create questions first
+    // Create questions first (mapping ensures all fields are preserved)
     const questionDocs = await Question.insertMany(
       questions.map(q => ({
         text: q.question || q.text,
+        type: q.type || 'mcq_single',
         options: q.options,
         correctAnswer: q.correctAnswer,
+        correctAnswers: q.correctAnswers || [],
+        correctAnswerBoolean: q.correctAnswerBoolean,
         explanation: q.explanation || '',
         imageUrl: q.imageUrl || null,
+        difficulty: difficulty || 'medium'
       }))
     );
 
@@ -162,14 +166,18 @@ router.put('/:id', auth, async (req, res) => {
       // Remove old questions
       await Question.deleteMany({ _id: { $in: quiz.questions } });
 
-      // Create new questions
+      // Create new questions (mapping ensures all fields are preserved)
       const questionDocs = await Question.insertMany(
         questions.map(q => ({
           text: q.question || q.text,
+          type: q.type || 'mcq_single',
           options: q.options,
           correctAnswer: q.correctAnswer,
+          correctAnswers: q.correctAnswers || [],
+          correctAnswerBoolean: q.correctAnswerBoolean,
           explanation: q.explanation || '',
           imageUrl: q.imageUrl || null,
+          difficulty: difficulty || 'medium'
         }))
       );
 
@@ -210,6 +218,66 @@ router.delete('/:id', auth, async (req, res) => {
   } catch (error) {
     console.error('Delete quiz error:', error);
     res.status(500).json({ error: 'Failed to delete quiz' });
+  }
+});
+
+// Sync offline quiz attempts
+router.post('/attempts', auth, async (req, res) => {
+  try {
+    const { quizId, answers, score, timeSpent, completedAt } = req.body;
+    
+    // Validate inputs
+    if (!quizId || !answers) {
+      return res.status(400).json({ error: 'Quiz ID and answers are required' });
+    }
+
+    const quiz = await Quiz.findById(quizId);
+    if (!quiz) {
+      return res.status(404).json({ error: 'Quiz not found' });
+    }
+
+    // Save result
+    const result = new QuizResult({
+      quizId,
+      userId: req.user._id,
+      answers,
+      score: score || 0,
+      percentage: score || 0, // Using provided score/percentage
+      timeSpent: timeSpent || 0,
+      completedAt: completedAt || new Date(),
+    });
+
+    await result.save();
+
+    // Award XP
+    const percentage = score || 0;
+    const xpAmount = percentage >= 80 ? 20 : percentage >= 60 ? 15 : 10;
+    
+    const quizTitle = quiz ? quiz.title : 'Synced Quiz';
+
+    // Create XP log entry
+    await XpLog.create({
+      user_id: req.user._id,
+      xp_earned: xpAmount,
+      activity_type: 'QUIZ_COMPLETE',
+      metadata: {
+        quizId: quizId,
+        quizTitle: quizTitle,
+        quizScore: percentage,
+        description: `Offline quiz synced (${percentage}%)`
+      }
+    });
+    
+    // Update user XP
+    // Unified XP Awarding (Update both xp and total_xp)
+    await User.findByIdAndUpdate(req.user._id, { 
+      $inc: { xp: xpAmount, total_xp: xpAmount } 
+    });
+
+    res.status(201).json({ success: true, resultId: result._id });
+  } catch (error) {
+    console.error('Sync quiz attempt error:', error);
+    res.status(500).json({ error: 'Failed to sync quiz attempt' });
   }
 });
 
@@ -279,7 +347,12 @@ router.post('/:id/submit', auth, async (req, res) => {
       
       // Method 1: Try using app.locals.awardXp if available
       if (req.app && req.app.locals && typeof req.app.locals.awardXp === 'function') {
-        const xpResult = await req.app.locals.awardXp(String(req.user._id), 'QUIZ_COMPLETE', xpAmount);
+        const xpResult = await req.app.locals.awardXp(String(req.user._id), 'QUIZ_COMPLETE', xpAmount, {
+          quizId: quiz._id.toString(),
+          quizTitle: quiz.title,
+          quizScore: score,
+          description: `Quiz completed with ${percentage}% score`
+        });
         console.log('[submitQuiz] XP awarded via app.locals:', xpResult);
       } else {
         // Method 2: Fallback - direct update to User and create XP log
@@ -291,7 +364,8 @@ router.post('/:id/submit', auth, async (req, res) => {
           xp_earned: xpAmount,
           activity_type: 'QUIZ_COMPLETE',
           metadata: {
-            quizId: quizId,
+            quizId: quiz._id.toString(),
+            quizTitle: quiz.title,
             quizScore: score,
             description: `Quiz completed with ${percentage}% score`
           }
@@ -300,7 +374,7 @@ router.post('/:id/submit', auth, async (req, res) => {
         // Update user XP
         const updatedUser = await User.findByIdAndUpdate(
           req.user._id,
-          { $inc: { xp: xpAmount } },
+          { $inc: { xp: xpAmount, total_xp: xpAmount } },
           { new: true }
         );
         

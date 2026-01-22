@@ -4,39 +4,139 @@ import { Navbar } from '../components/Navbar';
 import { SOTWConfetti } from '../components/SOTWConfetti';
 import { useAuthStore } from '../services/store';
 import { gamificationAPI } from '../services/api';
-import { BookOpen, MessageSquare, Zap, Award, Users, Brain } from 'lucide-react';
+import { BookOpen, MessageSquare, Zap, Award, Users, Brain, FileText, Clock } from 'lucide-react';
+
+// Relative time helper
+const formatRelativeTime = (dateString: string) => {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+  if (diffInSeconds < 60) return 'Just now';
+  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+  if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`;
+
+  return date.toLocaleDateString();
+};
+
+const getActivityDetails = (activity: any) => {
+  const type = activity.activity_type.toUpperCase();
+  const metadata = activity.metadata || {};
+
+  switch (type) {
+    case 'QUIZ_COMPLETE':
+    case 'QUIZ_COMPLETED':
+      return {
+        icon: Brain,
+        color: 'bg-blue-100 text-blue-600',
+        title: `Quiz: ${metadata.quizTitle || metadata.description || 'General Quiz'}`,
+        subtitle: metadata.quizScore !== undefined ? `${metadata.quizScore}% Score` : 'Complete'
+      };
+    case 'FLASHCARD_COMPLETE':
+    case 'FLASHCARD_REVIEWED':
+      return {
+        icon: BookOpen,
+        color: 'bg-purple-100 text-purple-600',
+        title: `Flashcards: ${metadata.flashcardSetName || 'Study Session'}`,
+        subtitle: metadata.cardsReviewed ? `${metadata.cardsReviewed} cards` : 'Reviewed'
+      };
+    case 'DAILY_LOGIN':
+    case 'APP_ENTRY':
+      return {
+        icon: Award,
+        color: 'bg-orange-100 text-orange-600',
+        title: 'Daily Login Bonus',
+        subtitle: 'Streak continued!'
+      };
+    case 'STREAK_BONUS':
+      return {
+        icon: Zap,
+        color: 'bg-yellow-100 text-yellow-600',
+        title: 'Streak Milestone!',
+        subtitle: 'Bonus XP'
+      };
+    case 'GROUP_MESSAGE':
+    case 'COMMUNITY_PARTICIPATION':
+      return {
+        icon: Users,
+        color: 'bg-green-100 text-green-600',
+        title: 'Community Contribution',
+        subtitle: 'Active member'
+      };
+    case 'FILE_UPLOAD':
+    case 'DOCUMENT_UPLOAD':
+      return {
+        icon: FileText,
+        color: 'bg-indigo-100 text-indigo-600',
+        title: 'Material Added',
+        subtitle: metadata.filename || metadata.fileName || metadata.title || 'Uploaded'
+      };
+    case 'NOTE_SUMMARY':
+      return {
+        icon: FileText,
+        color: 'bg-green-100 text-green-600',
+        title: 'Note Summarized',
+        subtitle: metadata.noteTitle || 'AI Summary generated'
+      };
+    case 'AI_TUTOR_USAGE':
+      return {
+        icon: Brain,
+        color: 'bg-indigo-100 text-indigo-600',
+        title: 'AI Tutor Session',
+        subtitle: metadata.subject || 'Learning'
+      };
+    default:
+      return {
+        icon: Zap,
+        color: 'bg-gray-100 text-gray-600',
+        title: type.replace(/_/g, ' '),
+        subtitle: metadata.description || 'Action completed'
+      };
+  }
+};
 
 export const DashboardPage: React.FC = () => {
   const { user, refreshUserStats } = useAuthStore();
   const navigate = useNavigate();
   const [stats, setStats] = useState({
     totalXp: 0,
+    weeklyXp: 0,
     streak: 0,
     level: 1,
     badges: 0,
     todaysXp: 0,
     isStreakActive: false,
   });
+  const [activities, setActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchUserStats = async () => {
     try {
-      const [activityResponse, streakResponse] = await Promise.all([
+      // Trigger app entry logic once per load
+      gamificationAPI.userEnter().catch(console.error);
+
+      const [activityResponse, statsResponse, historyResponse] = await Promise.all([
         gamificationAPI.getUserActivity(),
-        gamificationAPI.getStreak().catch(() => ({ data: { currentStreak: 0, isStreakActive: false } }))
+        gamificationAPI.getProfileStats().catch(() => ({ data: { xp: 0, currentStreak: 0, isStreakActive: false } })),
+        gamificationAPI.getXpHistory().catch(() => ({ data: { history: [] } }))
       ]);
 
       const activityData = activityResponse.data;
-      const streakData = streakResponse.data;
+      const statsData = statsResponse.data;
+      const historyData = historyResponse.data;
 
       setStats({
-        totalXp: activityData.totalXp || 0,
-        streak: activityData.currentStreak || 0,
-        level: activityData.level || 1,
-        badges: activityData.badges?.length || 0,
+        totalXp: statsData.xp || activityData.totalXp || 0,
+        weeklyXp: statsData.weeklyXp || 0,
+        streak: statsData.currentStreak || activityData.currentStreak || 0,
+        level: statsData.level || activityData.level || 1,
+        badges: statsData.badges?.length || 0,
         todaysXp: activityData.todaysXp || 0,
-        isStreakActive: streakData.isStreakActive || false,
+        isStreakActive: statsData.isStreakActive || false,
       });
+
+      setActivities(historyData.history || []);
     } catch (error) {
       console.error('Failed to fetch user stats:', error);
       // Fallback to user object data
@@ -81,10 +181,10 @@ export const DashboardPage: React.FC = () => {
         totalXp: user.total_xp || 0,
         streak: user.current_streak || 0,
         level: user.level || 1,
-        badges: user.badges?.length || 0,
+        badges: user.badges?.length || prev.badges,
       }));
     }
-  }, [user?.total_xp, user?.level, user?.current_streak]);
+  }, [user?.total_xp, user?.level, user?.current_streak, user?.badges]);
 
   const features = [
     {
@@ -174,7 +274,7 @@ export const DashboardPage: React.FC = () => {
                 <Zap className="text-blue-600" size={24} />
               </div>
             </div>
-            <p className="text-xs text-gray-500 mt-4">+500 this week</p>
+            <p className="text-xs text-gray-500 mt-4">+{stats.weeklyXp} this week</p>
           </div>
 
           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
@@ -251,40 +351,50 @@ export const DashboardPage: React.FC = () => {
 
         {/* Recent Activity */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-6">Recent Activity</h2>
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-xl font-bold text-gray-900">Recent Activity</h2>
+            <button 
+              onClick={() => navigate('/history')}
+              className="text-blue-600 text-sm font-medium hover:underline"
+            >
+              View Full History
+            </button>
+          </div>
+          
           <div className="space-y-4">
-            <div className="flex items-center gap-4 pb-4 border-b border-gray-200">
-              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                <Brain size={20} className="text-blue-600" />
+            {activities.length > 0 ? (
+              activities.slice(0, 5).map((activity, index) => {
+                const details = getActivityDetails(activity);
+                const ActivityIcon = details.icon;
+                return (
+                  <div key={activity._id || index} className={`flex items-center gap-4 ${index !== Math.min(activities.length, 5) - 1 ? 'pb-4 border-b border-gray-100' : ''}`}>
+                    <div className={`w-10 h-10 ${details.color} rounded-full flex items-center justify-center flex-shrink-0`}>
+                      <ActivityIcon size={20} />
+                    </div>
+                    <div className="flex-grow min-w-0">
+                      <p className="text-gray-900 font-semibold truncate">{details.title}</p>
+                      <p className="text-gray-500 text-sm flex items-center gap-1">
+                        <Clock size={12} />
+                        {formatRelativeTime(activity.timestamp)} • {details.subtitle}
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-end">
+                      <span className="bg-green-100 text-green-700 text-xs font-bold px-2.5 py-1 rounded-lg">
+                        +{activity.xp_earned} XP
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="text-center py-12">
+                <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Clock className="text-gray-300" size={32} />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-1">No activity yet</h3>
+                <p className="text-gray-500 text-sm">Activities will appear here as you learn.</p>
               </div>
-              <div className="flex-grow">
-                <p className="text-gray-900 font-medium">Quiz Completed: Calculus Fundamentals</p>
-                <p className="text-gray-500 text-sm">Today at 2:30 PM • 85% Score</p>
-              </div>
-              <span className="bg-green-100 text-green-700 text-xs font-semibold px-3 py-1 rounded-full">+150 XP</span>
-            </div>
-
-            <div className="flex items-center gap-4 pb-4 border-b border-gray-200">
-              <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
-                <BookOpen size={20} className="text-purple-600" />
-              </div>
-              <div className="flex-grow">
-                <p className="text-gray-900 font-medium">Flashcard Session: Biology</p>
-                <p className="text-gray-500 text-sm">Yesterday • 24 cards reviewed</p>
-              </div>
-              <span className="bg-green-100 text-green-700 text-xs font-semibold px-3 py-1 rounded-full">+48 XP</span>
-            </div>
-
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
-                <Users size={20} className="text-green-600" />
-              </div>
-              <div className="flex-grow">
-                <p className="text-gray-900 font-medium">Joined Study Group: Physics 101</p>
-                <p className="text-gray-500 text-sm">2 days ago</p>
-              </div>
-              <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-3 py-1 rounded-full">+10 XP</span>
-            </div>
+            )}
           </div>
         </div>
       </div>

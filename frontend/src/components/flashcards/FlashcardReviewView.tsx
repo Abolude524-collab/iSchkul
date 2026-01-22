@@ -46,44 +46,46 @@ const FlashcardReviewView: React.FC<Props> = ({ dueCards, currentCardIndex, isFl
       {dueCards.length > 0 && (
         <div className="max-w-2xl mx-auto perspective-1000">
           <div
-            className={`relative w-full h-[400px] transition-all duration-700 preserve-3d cursor-pointer ${isFlipped ? 'rotate-y-180' : ''
+            className={`relative w-full h-[350px] sm:h-[400px] transition-all duration-700 preserve-3d cursor-pointer ${isFlipped ? 'rotate-y-180' : ''
               }`}
             onClick={onFlip}
           >
             {/* Front Side */}
-            <div className="absolute inset-0 backface-hidden bg-white rounded-2xl shadow-xl border border-gray-100 flex flex-col items-center justify-center p-8 text-center group">
+            <div className="absolute inset-0 backface-hidden bg-white rounded-2xl shadow-xl border border-gray-100 flex flex-col items-center justify-center p-6 sm:p-8 text-center group overflow-hidden">
               <div className="absolute top-4 left-4 bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
                 Question
               </div>
-              <div className="w-20 h-20 mb-6 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg transform group-hover:scale-110 transition-transform">
-                <Brain className="text-white w-10 h-10" />
+              <div className="w-16 h-16 sm:w-20 sm:h-20 mb-4 sm:mb-6 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg transform group-hover:scale-110 transition-transform">
+                <Brain className="text-white w-8 h-8 sm:w-10 sm:h-10" />
               </div>
-              <p className="text-xl sm:text-2xl font-bold text-gray-800 leading-relaxed mb-4">
-                {dueCards[currentCardIndex].front}
-              </p>
-              <div className="mt-8 text-sm text-gray-400 font-medium animate-pulse">
+              <div className="max-h-[200px] sm:max-h-[220px] overflow-y-auto custom-scrollbar w-full px-2">
+                <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-800 leading-relaxed">
+                  {dueCards[currentCardIndex].front}
+                </p>
+              </div>
+              <div className="mt-4 sm:mt-8 text-sm text-gray-400 font-medium animate-pulse">
                 Click to reveal answer
               </div>
             </div>
 
             {/* Back Side */}
-            <div className="absolute inset-0 backface-hidden rotate-y-180 bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 rounded-2xl shadow-2xl flex flex-col items-center justify-center p-8 text-center text-white overflow-hidden">
+            <div className="absolute inset-0 backface-hidden rotate-y-180 bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 rounded-2xl shadow-2xl flex flex-col items-center justify-center p-6 sm:p-8 text-center text-white overflow-hidden">
               {/* Decorative Circles */}
-              <div className="absolute -top-20 -right-20 w-40 h-40 bg-white/10 rounded-full blur-2xl" />
-              <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-pink-500/20 rounded-full blur-2xl" />
+              <div className="absolute -top-10 -right-10 w-32 h-32 sm:w-40 sm:h-40 bg-white/10 rounded-full blur-2xl" />
+              <div className="absolute -bottom-10 -left-10 w-32 h-32 sm:w-40 sm:h-40 bg-pink-500/20 rounded-full blur-2xl" />
 
               <div className="absolute top-4 right-4 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
                 Answer
               </div>
-              <div className="w-20 h-20 mb-6 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center shadow-lg border border-white/30">
-                <Target className="text-white w-10 h-10" />
+              <div className="w-16 h-16 sm:w-20 sm:h-20 mb-4 sm:mb-6 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center shadow-lg border border-white/30">
+                <Target className="text-white w-8 h-8 sm:w-10 sm:h-10" />
               </div>
-              <div className="max-h-[220px] overflow-y-auto custom-scrollbar pr-2">
-                <p className="text-xl sm:text-2xl font-semibold leading-relaxed">
+              <div className="max-h-[200px] sm:max-h-[220px] overflow-y-auto custom-scrollbar w-full px-2">
+                <p className="text-lg sm:text-xl md:text-2xl font-semibold leading-relaxed">
                   {dueCards[currentCardIndex].back}
                 </p>
               </div>
-              <div className="mt-8 text-sm text-indigo-100 font-medium">
+              <div className="mt-4 sm:mt-8 text-sm text-indigo-100 font-medium">
                 Click to flip back
               </div>
             </div>

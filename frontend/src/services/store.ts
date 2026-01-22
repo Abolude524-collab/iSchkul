@@ -69,7 +69,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       const token = localStorage.getItem('authToken')
       if (!token) return
 
-      const response = await fetch(getAPIEndpoint('/gamification/activity'), {
+      const response = await fetch(getAPIEndpoint('/gamification/profile-stats'), {
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -85,7 +85,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         return {
           user: {
             ...state.user,
-            total_xp: data.totalXp,
+            total_xp: data.xp,
             level: data.level,
             current_streak: data.currentStreak,
             badges: data.badges

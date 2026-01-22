@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useBeforeUnload } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { useAuthStore } from '../services/store';
@@ -8,7 +8,10 @@ import { Loader, AlertCircle, CheckCircle, XCircle, Brain, Calculator, Plus, Boo
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell, Legend } from 'recharts';
 import { QuizSettingsForm } from '../components/QuizSettingsForm';
 import { QuestionListEditor } from '../components/QuestionListEditor';
+import { QuestionRenderer } from '../components/QuestionRenderer';
 import { Question as QuizQuestion, QuizCreateForm } from '../types/quiz';
+import { OfflineDownloadButton } from '../components/OfflineDownloadButton';
+import { getQuizzesByUser, getAllQuizzes, getQuiz, saveQuizAttempt } from '../services/indexedDB';
 
 type Question = QuizQuestion;
 
@@ -85,7 +88,7 @@ export const QuizPage: React.FC = () => {
 
   // Quiz taking
   const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [answers, setAnswers] = useState<number[]>([]);
+  const [answers, setAnswers] = useState<any[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
   const [attemptNumber, setAttemptNumber] = useState(1);
@@ -110,6 +113,59 @@ export const QuizPage: React.FC = () => {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [pastedText, setPastedText] = useState('');
   const [generateMode, setGenerateMode] = useState<'topic' | 'paste'>('topic');
+
+  // Navigation Guard / Unsaved Changes
+  const isDirty = (
+    (view === 'create' && (formData.topic.trim() !== '' || pastedText.trim() !== '')) ||
+    (view === 'taking' && !submitted) ||
+    (view === 'edit')
+  );
+
+  // Prevent browser reload/close
+  useBeforeUnload(
+    useCallback(
+      (event) => {
+        if (isDirty) {
+          event.preventDefault();
+        }
+      },
+      [isDirty]
+    )
+  );
+
+  // Handle intra-app navigation (manual buttons)
+  const handleNavWithGuard = (targetView: QuizView) => {
+    if (isDirty) {
+      if (window.confirm('You have unsaved changes or an active quiz. Are you sure you want to leave?')) {
+        setView(targetView);
+        if (targetView === 'dashboard') {
+          setSelectedQuiz(null);
+          setQuiz(null);
+        }
+      }
+    } else {
+      setView(targetView);
+      if (targetView === 'dashboard') {
+        setSelectedQuiz(null);
+        setQuiz(null);
+      }
+    }
+  };
+
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      if (isDirty) {
+        if (!window.confirm('You have unsaved changes or an active quiz. Are you sure you want to go back?')) {
+          window.history.pushState(null, '', window.location.href);
+          return;
+        }
+      }
+    };
+
+    window.history.pushState(null, '', window.location.href);
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [isDirty]);
 
   useEffect(() => {
     if (!user) {
@@ -151,7 +207,7 @@ export const QuizPage: React.FC = () => {
   const startQuiz = () => {
     if (quiz) {
       setSelectedQuiz(quiz);
-      setAnswers(new Array(quiz.questions?.length || 0).fill(-1));
+      setAnswers(new Array(quiz.questions?.length || 0).fill(null));
       setCurrentQuestion(0);
     }
 
@@ -287,7 +343,20 @@ export const QuizPage: React.FC = () => {
         } else if (typeof q.answer === 'number') correctAnswer = q.answer;
 
         const explanation = q.explanation || q.reason || '';
-        return { text, options, correctAnswer, explanation } as Question;
+        const type = q.type || 'mcq_single';
+        const correctAnswers = q.correctAnswers || (typeof q.correctAnswer === 'number' ? [q.correctAnswer] : []);
+        const correctAnswerBoolean = q.correctAnswerBoolean;
+        
+        return { 
+          ...q,
+          text, 
+          options, 
+          correctAnswer, 
+          correctAnswers,
+          correctAnswerBoolean,
+          explanation,
+          type 
+        } as Question;
       });
 
       const newQuiz: Quiz = {
@@ -302,7 +371,7 @@ export const QuizPage: React.FC = () => {
       };
 
       setQuiz(newQuiz);
-      setAnswers(new Array(normalizedQuestions.length).fill(-1));
+      setAnswers(new Array(normalizedQuestions.length).fill(null));
       setView('generated');
     } catch (err: any) {
       setError(err.message || 'Failed to generate quiz');
@@ -311,14 +380,14 @@ export const QuizPage: React.FC = () => {
     }
   };
 
-  const handleAnswer = (optionIndex: number) => {
+  const handleAnswer = (answer: any) => {
     const newAnswers = [...answers];
-    newAnswers[currentQuestion] = optionIndex;
+    newAnswers[currentQuestion] = answer;
     setAnswers(newAnswers);
   };
 
   const handleSubmit = async () => {
-    if (answers.includes(-1)) {
+    if (answers.includes(null)) {
       setError('Please answer all questions before submitting');
       return;
     }
@@ -330,8 +399,25 @@ export const QuizPage: React.FC = () => {
     const qs = currentQuiz?.questions || [];
     let correctCount = 0;
     qs.forEach((question, index) => {
-      if (answers[index] === question.correctAnswer) {
-        correctCount++;
+      const qType = question.type || 'mcq_single';
+      const userAnswer = answers[index];
+
+      if (qType === 'mcq_single') {
+        if (userAnswer === question.correctAnswer) {
+          correctCount++;
+        }
+      } else if (qType === 'mcq_multiple') {
+        const userAnswers = Array.isArray(userAnswer) ? userAnswer : [];
+        const correctAnswers = question.correctAnswers || [];
+        if (userAnswers.length === correctAnswers.length &&
+          userAnswers.every(val => correctAnswers.includes(val)) &&
+          correctAnswers.every(val => userAnswers.includes(val))) {
+          correctCount++;
+        }
+      } else if (qType === 'true_false') {
+        if (userAnswer === question.correctAnswerBoolean) {
+          correctCount++;
+        }
       }
     });
 
@@ -386,13 +472,31 @@ export const QuizPage: React.FC = () => {
   };
 
   const handleAutoSubmit = async () => {
-    if (!quiz) return;
+    const currentQuiz = selectedQuiz || quiz;
+    if (!currentQuiz) return;
 
-    const qs = quiz?.questions || [];
+    const qs = currentQuiz?.questions || [];
     let correctCount = 0;
-    answers.forEach((answer, index) => {
-      if (qs[index] && answer === qs[index].correctAnswer) {
-        correctCount++;
+    qs.forEach((question, index) => {
+      const qType = question.type || 'mcq_single';
+      const userAnswer = answers[index];
+
+      if (qType === 'mcq_single') {
+        if (userAnswer === question.correctAnswer) {
+          correctCount++;
+        }
+      } else if (qType === 'mcq_multiple') {
+        const userAnswers = Array.isArray(userAnswer) ? userAnswer : [];
+        const correctAnswers = question.correctAnswers || [];
+        if (userAnswers.length === correctAnswers.length &&
+          userAnswers.every(val => correctAnswers.includes(val)) &&
+          correctAnswers.every(val => userAnswers.includes(val))) {
+          correctCount++;
+        }
+      } else if (qType === 'true_false') {
+        if (userAnswer === question.correctAnswerBoolean) {
+          correctCount++;
+        }
       }
     });
 
@@ -404,7 +508,7 @@ export const QuizPage: React.FC = () => {
     try {
       const token = localStorage.getItem('authToken');
       const submitResponse = await fetch(
-        getAPIEndpoint(`/quizzes/${quiz._id}/submit`),
+        getAPIEndpoint(`/quizzes/${currentQuiz._id}/submit`),
         {
           method: 'POST',
           headers: {
@@ -513,20 +617,89 @@ export const QuizPage: React.FC = () => {
   const fetchQuizzes = async () => {
     try {
       setLoading(true);
+      setError('');
+      
+      // SPEED OPTIMIZATION: Check offline status immediately
+      if (!navigator.onLine) {
+        console.log('Detected offline status, loading quizzes from storage...');
+        await loadQuizzesOffline();
+        return;
+      }
+
+      // Start loading offline data in background so it's ready if network fails
+      const offlinePromise = loadQuizzesOffline();
+
       const token = localStorage.getItem('authToken');
       const response = await fetch(getAPIEndpoint('/quizzes'), {
         headers: { Authorization: `Bearer ${token}` },
       });
+      
       if (response.ok) {
         const data = await response.json();
         setQuizzes(data.quizzes);
+      } else {
+        console.warn('Network response not OK, attempting offline load...');
+        await loadQuizzesOffline();
       }
     } catch (err: any) {
-      setError(err.message);
+      console.warn('Fetch failed, attempting offline load:', err.message);
+      await loadQuizzesOffline();
     } finally {
       setLoading(false);
     }
   };
+
+  const loadQuizzesOffline = async () => {
+    setLoading(true); // Ensure loading is true while we read from DB
+    try {
+      let offlineQuizzes = [];
+      const currentUserId = user?._id || user?.id;
+      
+      console.log('Loading quizzes from offline storage...', { userId: currentUserId });
+      
+      if (currentUserId) {
+        offlineQuizzes = await getQuizzesByUser(currentUserId);
+      }
+      
+      // Secondary fallback: get all local quizzes if user filtered return nothing
+      if (!offlineQuizzes || offlineQuizzes.length === 0) {
+        console.log('No user-specific quizzes found, fetching all local quizzes...');
+        offlineQuizzes = await getAllQuizzes();
+      }
+      
+      if (offlineQuizzes && offlineQuizzes.length > 0) {
+        console.log(`Successfully loaded ${offlineQuizzes.length} offline quizzes`);
+        setQuizzes(offlineQuizzes);
+        setError('');
+      } else {
+        console.warn('No saved quizzes found in local database');
+        setQuizzes([]);
+        setError('You are offline and have no saved quizzes. Go online to download some.');
+      }
+    } catch (offlineErr: any) {
+      console.error('Failed to load quizzes offline:', offlineErr);
+      setError('Failed to load quizzes from offline storage.');
+    } finally {
+      // Small delay ensures state is settled before spinner hides
+      setTimeout(() => setLoading(false), 300);
+    }
+  };
+
+  // 📡 Watch for online/offline status changes to auto-refresh
+  useEffect(() => {
+    const handleConnectivityChange = () => {
+      console.log(`Connection changed: ${navigator.onLine ? 'ONLINE' : 'OFFLINE'}`);
+      fetchQuizzes();
+    };
+
+    window.addEventListener('online', handleConnectivityChange);
+    window.addEventListener('offline', handleConnectivityChange);
+
+    return () => {
+      window.removeEventListener('online', handleConnectivityChange);
+      window.removeEventListener('offline', handleConnectivityChange);
+    };
+  }, [user?._id, user?.id]);
 
   const createQuiz = async () => {
     if (!createForm.title.trim() || !questions.length) {
@@ -571,22 +744,40 @@ export const QuizPage: React.FC = () => {
   const startQuizTaking = async (quiz: Quiz) => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(getAPIEndpoint(`/quizzes/${quiz._id}`), {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      setError('');
+      
+      let fullQuiz = null;
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch quiz');
+      // 1. Try fetching from network if online
+      if (navigator.onLine) {
+        try {
+          const token = localStorage.getItem('authToken');
+          const response = await fetch(getAPIEndpoint(`/quizzes/${quiz._id}`), {
+            headers: { 'Authorization': `Bearer ${token}` },
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            fullQuiz = data.quiz;
+            console.log('Quiz loaded from network');
+          }
+        } catch (fetchErr) {
+          console.warn('Network fetch for quiz details failed, falling back to local DB:', fetchErr);
+        }
       }
 
-      const data = await response.json();
-      const fullQuiz = data.quiz;
+      // 2. Fallback to IndexedDB
+      if (!fullQuiz) {
+        console.log('Searching for quiz in offline storage:', quiz._id);
+        fullQuiz = await getQuiz(quiz._id);
+      }
+
+      if (!fullQuiz || !fullQuiz.questions || fullQuiz.questions.length === 0) {
+        throw new Error('Quiz data not found. Please connect to the internet to download this quiz for offline use.');
+      }
 
       setSelectedQuiz(fullQuiz);
-      setAnswers(new Array(fullQuiz.questions.length).fill(-1));
+      setAnswers(new Array(fullQuiz.questions.length).fill(null));
       setCurrentQuestion(0);
       setSubmitted(false);
       setScore(0);
@@ -598,9 +789,9 @@ export const QuizPage: React.FC = () => {
       setCalcOperation(null);
       setCalcWaitingForOperand(false);
       setView('taking');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error starting quiz:', error);
-      alert('Failed to start quiz. Please try again.');
+      alert(error.message || 'Failed to start quiz. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -614,47 +805,71 @@ export const QuizPage: React.FC = () => {
       const token = localStorage.getItem('authToken');
       const timeSpent = startTime ? Math.floor((new Date().getTime() - startTime.getTime()) / 1000) : 0;
 
-      console.log('📝 [submitQuiz] Starting submission');
-      console.log('📝 [submitQuiz] Quiz ID:', selectedQuiz._id);
-      console.log('📝 [submitQuiz] Answers count:', answers.length);
-      console.log('📝 [submitQuiz] Answers:', answers);
-      console.log('📝 [submitQuiz] Time spent:', timeSpent);
+      // Calculate score locally for immediate display/offline backup
+      const correctCount = selectedQuiz.questions.reduce((acc, q, idx) => {
+        return acc + (answers[idx] === q.correctAnswer ? 1 : 0);
+      }, 0);
+      const calculatedScore = (correctCount / selectedQuiz.questions.length) * 100;
 
-      const response = await fetch(getAPIEndpoint(`/quizzes/${selectedQuiz._id}/submit`), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          answers,
-          timeSpent,
-        }),
-      });
+      const attemptData = {
+        quizId: selectedQuiz._id,
+        quizTitle: selectedQuiz.title,
+        answers,
+        timeSpent,
+        score: calculatedScore,
+        correctCount,
+        totalQuestions: selectedQuiz.questions.length,
+        userId: user?._id || user?.id,
+        completedAt: new Date().toISOString()
+      };
 
-      console.log('📝 [submitQuiz] Response status:', response.status);
-      const data = await response.json();
-      console.log('📝 [submitQuiz] Response data:', data);
-
-      if (response.ok) {
-        console.log('✅ [submitQuiz] Quiz submitted successfully');
-        setQuizResult(data.result);
-        setSubmitted(true);
-        setView('results');
-
-        // Award XP for completing quiz
+      // 1. Try online submission
+      if (navigator.onLine) {
         try {
-          await gamificationAPI.awardXP('QUIZ_COMPLETE');
-          // Refresh user stats in auth store
-          await refreshUserStats();
-        } catch (xpError) {
-          console.error('Failed to award XP for quiz completion:', xpError);
+          const response = await fetch(getAPIEndpoint(`/quizzes/${selectedQuiz._id}/submit`), {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ answers, timeSpent }),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            setQuizResult(data.result);
+            setSubmitted(true);
+            setView('results');
+            
+            // Background XP award
+            gamificationAPI.awardXP('QUIZ_COMPLETE').catch(e => console.warn('XP award failed', e));
+            refreshUserStats().catch(e => console.warn('Stats refresh failed', e));
+            return;
+          }
+        } catch (submitErr) {
+          console.warn('Online submission failed, saving locally:', submitErr);
         }
-      } else {
-        const err = data;
-        console.error('❌ [submitQuiz] Failed to submit:', err);
-        setError(err.error || 'Failed to submit quiz');
       }
+
+      // 2. Offline Fallback: Save attempt to IndexedDB
+      console.log('Saving quiz attempt to offline storage...');
+      await saveQuizAttempt(attemptData);
+      
+      // Still show the local result to the user
+      setQuizResult({
+        quiz: selectedQuiz._id,
+        user: user?._id || user?.id || 'offline-user',
+        score: calculatedScore,
+        timeSpent,
+        correctAnswers: correctCount,
+        totalQuestions: selectedQuiz.questions.length,
+        createdAt: new Date().toISOString()
+      } as any);
+      
+      setSubmitted(true);
+      setView('results');
+      alert('You are offline. Your quiz result has been saved locally and will sync when you are back online.');
+
     } catch (err: any) {
       console.error('❌ [submitQuiz] Error:', err.message);
       setError(err.message);
@@ -785,7 +1000,7 @@ export const QuizPage: React.FC = () => {
     } else if (view === 'history') {
       fetchHistory();
     }
-  }, [view]);
+  }, [view, user?.id, user?._id]); // Re-fetch if user becomes available
 
   useEffect(() => {
     if (view === 'edit' && selectedQuiz) {
@@ -876,7 +1091,9 @@ export const QuizPage: React.FC = () => {
                   <div key={quiz._id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
                     <div className="flex justify-between items-start mb-4">
                       <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-1">{quiz.title}</h3>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                          {quiz.title && quiz.title !== 'Content-Based Quiz' ? quiz.title : quiz.subject || 'General Quiz'}
+                        </h3>
                         <p className="text-sm text-gray-600">{quiz.subject || 'General'}</p>
                       </div>
                       <div className="flex gap-2">
@@ -950,6 +1167,12 @@ export const QuizPage: React.FC = () => {
                         <Play size={16} />
                         Take Quiz
                       </button>
+                      <OfflineDownloadButton
+                        type="quiz"
+                        itemId={quiz._id}
+                        itemData={quiz}
+                        size="small"
+                      />
                       {quiz.isPublic && (
                         <button
                           onClick={() => {
@@ -983,7 +1206,7 @@ export const QuizPage: React.FC = () => {
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-gray-900">Create Custom Quiz</h2>
                 <button
-                  onClick={() => setView('dashboard')}
+                  onClick={() => handleNavWithGuard('dashboard')}
                   className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
                 >
                   Back to Dashboard
@@ -1166,7 +1389,16 @@ export const QuizPage: React.FC = () => {
         ) : view === 'create' ? (
           <div className="max-w-2xl mx-auto">
             <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">Create a Quiz</h2>
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">Create a Quiz</h2>
+                <button
+                  type="button"
+                  onClick={() => handleNavWithGuard('dashboard')}
+                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  Back to Dashboard
+                </button>
+              </div>
 
               <form onSubmit={generateQuiz} className="space-y-6">
                 <div>
@@ -1419,7 +1651,7 @@ export const QuizPage: React.FC = () => {
                     setCalcWaitingForOperand(false);
                     setView('taking');
                     setCurrentQuestion(0);
-                    setAnswers(new Array(quiz.questions?.length || 0).fill(-1));
+                    setAnswers(new Array(quiz.questions?.length || 0).fill(null));
                     setSubmitted(false);
                     setScore(0);
                   }}
@@ -1429,19 +1661,13 @@ export const QuizPage: React.FC = () => {
                   Start Quiz
                 </button>
                 <button
-                  onClick={() => {
-                    setView('create');
-                    setQuiz(null);
-                  }}
+                  onClick={() => handleNavWithGuard('create')}
                   className="px-6 py-4 border border-gray-300 text-gray-900 font-semibold rounded-lg hover:bg-gray-50 transition-all"
                 >
                   Generate Another
                 </button>
                 <button
-                  onClick={() => {
-                    setView('dashboard');
-                    setQuiz(null);
-                  }}
+                  onClick={() => handleNavWithGuard('dashboard')}
                   className="px-6 py-4 border border-gray-300 text-gray-900 font-semibold rounded-lg hover:bg-gray-50 transition-all"
                 >
                   Back to Dashboard
@@ -1454,7 +1680,7 @@ export const QuizPage: React.FC = () => {
             <div className="flex justify-between items-center mb-6">
               <div>
                 <button
-                  onClick={() => setView('dashboard')}
+                  onClick={() => handleNavWithGuard('dashboard')}
                   className="flex items-center text-blue-600 hover:text-blue-700 font-medium mb-2"
                 >
                   <ChevronLeft size={20} />
@@ -1474,7 +1700,7 @@ export const QuizPage: React.FC = () => {
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">No history yet</h3>
                 <p className="text-gray-600 mb-6">Take your first quiz to see your performance history!</p>
                 <button
-                  onClick={() => setView('dashboard')}
+                  onClick={() => handleNavWithGuard('dashboard')}
                   className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-all"
                 >
                   Go to Quizzes
@@ -1686,35 +1912,22 @@ export const QuizPage: React.FC = () => {
 
               <div className="space-y-4">
                 {selectedQuiz?.questions?.map((question, index) => (
-                  <div key={index} className="bg-gray-50 p-5 md:p-6 rounded-xl border border-gray-200">
-                    <p className="font-semibold text-gray-900 mb-3 leading-relaxed">{question.text}</p>
-                    <div className="space-y-2">
-                      {question.options.map((option, optIndex) => (
-                        <div
-                          key={optIndex}
-                          className={`p-3 md:p-4 rounded-lg border transition ${optIndex === question.correctAnswer
-                            ? 'bg-green-50 border-green-500'
-                            : optIndex === answers[index]
-                              ? 'bg-red-50 border-red-400'
-                              : 'bg-white border-gray-200'
-                            }`}
-                        >
-                          {optIndex === question.correctAnswer && answers[index] === optIndex && (
-                            <CheckCircle size={16} className="inline mr-2 text-green-600" />
-                          )}
-                          {optIndex === answers[index] && optIndex !== question.correctAnswer && (
-                            <XCircle size={16} className="inline mr-2 text-red-600" />
-                          )}
-                          <span className="text-sm md:text-base text-gray-900">{option}</span>
-                        </div>
-                      ))}
+                  <div key={index} className="bg-white p-5 md:p-8 rounded-2xl border border-gray-200 shadow-sm">
+                    <div className="flex items-center gap-2 mb-4">
+                      <span className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm">
+                        {index + 1}
+                      </span>
+                      <h4 className="text-lg font-bold text-gray-900 leading-relaxed">{question.text}</h4>
                     </div>
-                    {question.explanation && (
-                      <div className="mt-3 p-3 bg-blue-50 rounded-lg border-l-4 border-blue-500">
-                        <p className="text-xs font-semibold text-blue-900 uppercase tracking-wide">Explanation</p>
-                        <p className="text-sm text-blue-800 mt-1 leading-relaxed">{question.explanation}</p>
-                      </div>
-                    )}
+
+                    <QuestionRenderer
+                      question={question as any}
+                      answer={answers[index]}
+                      onAnswer={() => { }}
+                      disabled={true}
+                      submitted={true}
+                      showExplanation={true}
+                    />
                   </div>
                 ))}
               </div>
@@ -1732,7 +1945,7 @@ export const QuizPage: React.FC = () => {
                     setCalcWaitingForOperand(false);
                     setView('taking');
                     setCurrentQuestion(0);
-                    setAnswers(new Array(selectedQuiz?.questions?.length || 0).fill(-1));
+                    setAnswers(new Array(selectedQuiz?.questions?.length || 0).fill(null));
                     setSubmitted(false);
                     setScore(0);
                   }}
@@ -1790,10 +2003,7 @@ export const QuizPage: React.FC = () => {
                     {showCalculator ? 'Hide Calculator' : 'Show Calculator'}
                   </button>
                   <button
-                    onClick={() => {
-                      setView('dashboard');
-                      setSelectedQuiz(null);
-                    }}
+                    onClick={() => handleNavWithGuard('dashboard')}
                     className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
                   >
                     Exit Quiz
@@ -1813,32 +2023,15 @@ export const QuizPage: React.FC = () => {
                 {selectedQuiz?.questions?.[currentQuestion]?.text}
               </h3>
 
-              <div className="space-y-3 md:space-y-4 mb-8">
-                {selectedQuiz?.questions?.[currentQuestion]?.options.map((option, index) => (
-                  <button
-                    key={index}
-                    onClick={() => handleAnswer(index)}
-                    className={`w-full p-4 md:p-5 text-left rounded-xl border-2 transition-all ${answers[currentQuestion] === index
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-300 hover:border-gray-400 bg-white'
-                      }`}
-                  >
-                    <div className="flex items-center gap-3 md:gap-4">
-                      <div
-                        className={`w-6 h-6 md:w-7 md:h-7 rounded-full border-2 flex items-center justify-center ${answers[currentQuestion] === index
-                          ? 'border-blue-500 bg-blue-500'
-                          : 'border-gray-300'
-                          }`}
-                      >
-                        {answers[currentQuestion] === index && <div className="w-2 h-2 md:w-2.5 md:h-2.5 bg-white rounded-full"></div>}
-                      </div>
-                      <span className="text-gray-900 text-base md:text-lg">{option}</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
+              {selectedQuiz?.questions?.[currentQuestion] && (
+                <QuestionRenderer
+                  question={selectedQuiz.questions[currentQuestion] as any}
+                  answer={answers[currentQuestion]}
+                  onAnswer={handleAnswer}
+                />
+              )}
 
-              <div className="flex flex-col md:flex-row gap-3 md:gap-4">
+              <div className="flex flex-col md:flex-row gap-3 md:gap-4 mt-8">
                 <button
                   onClick={() => setCurrentQuestion(Math.max(0, currentQuestion - 1))}
                   disabled={currentQuestion === 0}
@@ -1874,7 +2067,7 @@ export const QuizPage: React.FC = () => {
                       onClick={() => setCurrentQuestion(index)}
                       className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold transition-all ${index === currentQuestion
                         ? 'bg-blue-600 text-white'
-                        : answers[index] !== -1
+                        : answers[index] !== null
                           ? 'bg-green-500 text-white'
                           : 'bg-gray-300 text-gray-700'
                         }`}

@@ -35,6 +35,12 @@ apiClient.interceptors.response.use(
     const data = error.response?.data;
 
     if (status === 401) {
+      // Check if we are offline - if so, don't clear session yet
+      if (!navigator.onLine) {
+        console.warn('Unauthorized error while offline. Ignoring for now.');
+        return Promise.reject(error);
+      }
+
       // Token is invalid or expired, clear auth data and redirect to login
       localStorage.removeItem('authToken')
       localStorage.removeItem('user')
@@ -131,8 +137,16 @@ export const personalChatAPI = {
 
 // Gamification endpoints
 export const gamificationAPI = {
-  awardXP: (activityType: string) =>
-    apiClient.post('/gamification/award', { activity_type: activityType }),
+  awardXP: (data: string | { activityType: string; xpAmount?: number; metadata?: any }) => {
+    if (typeof data === 'string') {
+      return apiClient.post('/gamification/award', { activity_type: data });
+    }
+    return apiClient.post('/gamification/award', {
+      activity_type: data.activityType,
+      xp_amount: data.xpAmount,
+      metadata: data.metadata,
+    });
+  },
   getUserStats: () =>
     apiClient.get('/gamification/activity'),
   userEnter: () =>
@@ -143,6 +157,8 @@ export const gamificationAPI = {
     apiClient.get('/gamification/history'),
   getUserActivity: () =>
     apiClient.get('/gamification/activity'),
+  getProfileStats: () =>
+    apiClient.get('/gamification/profile-stats'),
   joinLeaderboard: () =>
     apiClient.post('/gamification/join-leaderboard'),
   leaveLeaderboard: () =>

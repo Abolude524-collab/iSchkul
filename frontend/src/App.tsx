@@ -1,7 +1,10 @@
-import React, { Suspense } from 'react';
+import React, { Suspense, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { PageLoader } from './components/PageLoader';
 import { useAuthStore } from './services/store';
+import { useServiceWorker, useSyncListener } from './hooks/useOfflineSupport';
+import { fullSync } from './services/syncManager';
+import { openDB } from './services/indexedDB';
 
 // Lazy load pages for better performance
 const LandingPage = React.lazy(() => import('./pages/LandingPage').then(module => ({ default: module.LandingPage })));
@@ -35,11 +38,47 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 function App() {
+  const { user, token } = useAuthStore();
+  const { swReady, updateAvailable, updateApp } = useServiceWorker();
+
+  // Initialize IndexedDB on app startup
+  useEffect(() => {
+    const initDB = async () => {
+      try {
+        await openDB();
+        console.log('IndexedDB initialized successfully');
+      } catch (error) {
+        console.error('Failed to initialize IndexedDB:', error);
+      }
+    };
+    initDB();
+  }, []);
+
+  // Auto-sync when online
+  useSyncListener(async () => {
+    if (token) {
+      await fullSync(token);
+    }
+  });
+
+  // Show update prompt
+  useEffect(() => {
+    if (updateAvailable) {
+      const shouldUpdate = window.confirm(
+        'A new version of iSchkul is available. Update now?'
+      );
+      if (shouldUpdate) {
+        updateApp();
+      }
+    }
+  }, [updateAvailable, updateApp]);
+
   return (
-    <Router>
-      <AppEntryAward />
-      <Suspense fallback={<PageLoader />}>
-        <Routes>
+    <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <div className="app-container">
+        <AppEntryAward />
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
           {/* Public Routes */}
           <Route path="/" element={<LandingPage />} />
           <Route path="/about" element={<AboutPage />} />
@@ -170,6 +209,7 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
+      </div>
     </Router>
   );
 }

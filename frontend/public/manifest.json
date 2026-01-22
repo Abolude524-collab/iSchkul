@@ -1,0 +1,54 @@
+{
+  "name": "iSchkul - Offline Learning Platform",
+  "short_name": "iSchkul",
+  "description": "Learn anytime, anywhere - even offline. Create, take quizzes and review flashcards with instant sync when back online.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#6366f1",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "any",
+      "type": "image/x-icon",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["education", "productivity"],
+  "screenshots": [
+    {
+      "src": "/screenshot1.png",
+      "sizes": "540x720",
+      "type": "image/png",
+      "form_factor": "narrow"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Take Quiz",
+      "short_name": "Quiz",
+      "description": "Start a new quiz",
+      "url": "/dashboard/quiz",
+      "icons": [
+        {
+          "src": "/icon-quiz-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Flashcards",
+      "short_name": "Cards",
+      "description": "Review flashcards",
+      "url": "/dashboard/flashcards",
+      "icons": [
+        {
+          "src": "/icon-cards-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}

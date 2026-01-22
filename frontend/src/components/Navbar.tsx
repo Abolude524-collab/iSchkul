@@ -4,12 +4,13 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../services/store';
 import { getAPIEndpoint } from '../services/api';
 import { io, Socket } from 'socket.io-client';
+import SyncStatus from './SyncStatus';
 
 export const Navbar: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
   const [socket, setSocket] = useState<Socket | null>(null);
-  const { user, logout } = useAuthStore();
+  const { user, token, logout } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -83,7 +84,7 @@ export const Navbar: React.FC = () => {
     ...(user?.isAdmin ? [] : [{ label: 'Quiz', path: '/quiz', protected: true, adminOnly: false }]),
     ...(user?.isAdmin ? [] : [{ label: 'Flashcards', path: '/flashcards', protected: true, adminOnly: false }]),
     ...(user?.isAdmin ? [] : [{ label: 'Leaderboard', path: '/leaderboard', protected: true, adminOnly: false }]),
-    ...(user?.isAdmin ? [] : [{ label: 'XP History', path: '/xp-history', protected: true, adminOnly: false }]),
+    //...(user?.isAdmin ? [] : [{ label: 'XP History', path: '/xp-history', protected: true, adminOnly: false }]),
  
   ];
 
@@ -122,6 +123,7 @@ export const Navbar: React.FC = () => {
           <div className="hidden md:flex items-center gap-4">
             {user ? (
               <>
+                <SyncStatus token={token || undefined} />
                 <button
                   onClick={() => navigate('/notification')}
                   className="p-2 hover:bg-blue-700 rounded-full transition-colors relative"
@@ -190,13 +192,20 @@ export const Navbar: React.FC = () => {
             )}
           </div>
 
-          {/* Mobile menu button */}
-          <button
-            onClick={() => setIsOpen(!isOpen)}
-            className="md:hidden p-2 rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            {isOpen ? <X size={24} className="text-white" /> : <Menu size={24} className="text-white" />}
-          </button>
+          {/* Mobile section */}
+          <div className="md:hidden flex items-center gap-2">
+            {user && (
+              <div className="scale-90 origin-right">
+                <SyncStatus token={token || undefined} />
+              </div>
+            )}
+            <button
+              onClick={() => setIsOpen(!isOpen)}
+              className="p-2 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              {isOpen ? <X size={24} className="text-white" /> : <Menu size={24} className="text-white" />}
+            </button>
+          </div>
         </div>
 
         {/* Mobile Navigation */}

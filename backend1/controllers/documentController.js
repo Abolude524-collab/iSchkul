@@ -65,13 +65,24 @@ exports.uploadDocument = async (req, res) => {
         await document.save();
 
         // 3. Process Document (Extract Text & Pages) - supports PDF and DOCX
-        // Note: This can be a long running process. In production, offload to a queue.
-        // For MVP, we'll do it inline but be mindful of timeouts.
         const pages = await pdfProcessor.extractTextWithPages(req.file.buffer, req.file.mimetype);
         document.pages = pages.length;
         await document.save();
 
-        // 4. Chunking & Embedding
+        // 4. Award XP for upload
+        if (req.app && req.app.locals && typeof req.app.locals.awardXp === 'function') {
+            try {
+                await req.app.locals.awardXp(userId, 'file_upload', 15, {
+                    filename: req.file.originalname,
+                    title: title || req.file.originalname,
+                    documentId: document._id
+                });
+            } catch (xpError) {
+                console.error('Failed to award XP for upload:', xpError);
+            }
+        }
+
+        // 5. Chunking & Embedding
         let totalChunks = 0;
         const vectors = [];
 

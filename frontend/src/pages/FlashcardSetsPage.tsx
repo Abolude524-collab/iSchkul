@@ -5,6 +5,8 @@ import { Footer } from '../components/Footer';
 import { useAuthStore } from '../services/store';
 import { flashcardSetsAPI, flashcardAPI } from '../services/api';
 import { Loader, Plus, Share2, Edit, Trash2, BookOpen, Eye, Copy, CheckCircle } from 'lucide-react';
+import { OfflineDownloadButton } from '../components/OfflineDownloadButton';
+import { getFlashcardSetsByUser, getAllFlashcardSets } from '../services/indexedDB';
 
 interface FlashcardSet {
   _id: string;
@@ -41,24 +43,92 @@ export const FlashcardSetsPage: React.FC = () => {
   });
 
   useEffect(() => {
-    if (!user) {
+    // Only redirect if we are online and have no user
+    // If offline, we want to stay on the page to use saved data
+    if (!user && navigator.onLine) {
       navigate('/login');
       return;
     }
     loadSets();
-  }, [user, navigate]);
+  }, [user, navigate, user?.id, user?._id]);
 
   const loadSets = async () => {
     try {
       setLoading(true);
+      setError('');
+
+      // OPTIMIZATION: Show offline data immediately if offline
+      if (!navigator.onLine) {
+        console.log('Detected offline status, loading sets from storage...');
+        await loadSetsOffline();
+        return;
+      }
+
+      // If online, we could technically race or just await. 
+      // User wants SPEED. Let's load offline first, then refresh from network.
+      const offlinePromise = loadSetsOffline(); 
+      
       const response = await flashcardSetsAPI.getUserSets();
       setSets(response.data.sets);
     } catch (err: any) {
-      setError(err.message);
+      console.warn('Network fetch failed, attempting offline load:', err.message);
+      await loadSetsOffline();
     } finally {
       setLoading(false);
     }
   };
+
+  const loadSetsOffline = async () => {
+    setLoading(true);
+    try {
+      let offlineSets = [];
+      const currentUserId = user?._id || user?.id;
+
+      console.log('Loading flashcard sets from offline storage...', { userId: currentUserId });
+
+      if (currentUserId) {
+        offlineSets = await getFlashcardSetsByUser(currentUserId);
+      }
+      
+      // Secondary fallback: get all local sets if user filtered return nothing
+      if (!offlineSets || offlineSets.length === 0) {
+        console.log('No user-specific sets found, fetching all local sets...');
+        offlineSets = await getAllFlashcardSets();
+      }
+      
+      if (offlineSets && offlineSets.length > 0) {
+        console.log(`Successfully loaded ${offlineSets.length} offline flashcard sets`);
+        setSets(offlineSets);
+        setError('');
+      } else {
+        console.warn('No saved flashcard sets found in local database');
+        setSets([]);
+        setError('You are offline and have no saved flashcard sets. Go online to download some.');
+      }
+    } catch (offlineErr: any) {
+      console.error('Failed to load flashcard sets offline:', offlineErr);
+      setError('Failed to load flashcard sets from offline storage.');
+    } finally {
+      // Small delay ensures state is settled before spinner hides
+      setTimeout(() => setLoading(false), 300);
+    }
+  };
+
+  // 📡 Watch for online/offline status changes to auto-refresh
+  useEffect(() => {
+    const handleConnectivityChange = () => {
+      console.log(`Connection changed: ${navigator.onLine ? 'ONLINE' : 'OFFLINE'}`);
+      loadSets();
+    };
+
+    window.addEventListener('online', handleConnectivityChange);
+    window.addEventListener('offline', handleConnectivityChange);
+
+    return () => {
+      window.removeEventListener('online', handleConnectivityChange);
+      window.removeEventListener('offline', handleConnectivityChange);
+    };
+  }, [user?._id, user?.id]);
 
   const handleCreateSet = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -351,6 +421,12 @@ export const FlashcardSetsPage: React.FC = () => {
                 >
                   Study Cards
                 </button>
+                <OfflineDownloadButton
+                  type="flashcard"
+                  itemId={set._id}
+                  itemData={{ set, cards: [] }}
+                  size="small"
+                />
                 <button
                   onClick={() => handleCopyShareLink(set.shareUrl)}
                   className={`px-3 py-2 rounded-lg transition-colors text-sm font-medium flex items-center gap-1 ${
