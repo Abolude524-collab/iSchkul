@@ -1020,8 +1020,8 @@ export const QuizPage: React.FC = () => {
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Navbar />
 
-      <div className="flex-grow max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-12">
-        <h1 className="text-4xl font-bold text-gray-900 mb-8">Quiz Center</h1>
+      <div className="flex-grow max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 md:py-12">
+        <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6 md:mb-8">Quiz Center</h1>
 
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex gap-3">
@@ -1032,29 +1032,29 @@ export const QuizPage: React.FC = () => {
 
         {view === 'dashboard' ? (
           <div className="space-y-8">
-            <div className="flex justify-between items-center">
-              <h1 className="text-4xl font-bold text-gray-900">Quiz Dashboard</h1>
-              <div className="flex gap-4">
+            <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-6">
+              <h1 className="text-3xl md:text-4xl font-bold text-gray-900">Quiz Dashboard</h1>
+              <div className="flex flex-wrap md:flex-row gap-3 w-full md:w-auto">
                 <button
                   onClick={() => setView('history')}
-                  className="px-6 py-3 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 hover:shadow-md transition-all flex items-center gap-2"
+                  className="flex-1 md:flex-none px-4 py-2.5 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 hover:shadow-md transition-all flex items-center justify-center gap-2 text-sm md:text-base"
                 >
-                  <History size={20} />
+                  <History size={18} />
                   View History
                 </button>
                 <button
                   onClick={() => setView('create')}
-                  className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg transition-all flex items-center gap-2"
+                  className="flex-1 md:flex-none px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg transition-all flex items-center justify-center gap-2 text-sm md:text-base text-center"
                 >
-                  <Brain size={20} />
-                  AI Generate Quiz
+                  <Brain size={18} />
+                  AI Generate
                 </button>
                 <button
                   onClick={() => setView('custom-create')}
-                  className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-lg hover:shadow-lg transition-all flex items-center gap-2"
+                  className="flex-1 md:flex-none px-4 py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-lg hover:shadow-lg transition-all flex items-center justify-center gap-2 text-sm md:text-base text-center"
                 >
-                  <Plus size={20} />
-                  Create Custom Quiz
+                  <Plus size={18} />
+                  Custom Quiz
                 </button>
               </div>
             </div>
@@ -1068,17 +1068,17 @@ export const QuizPage: React.FC = () => {
                 <BookOpen size={64} className="text-gray-400 mx-auto mb-4" />
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">No quizzes yet</h3>
                 <p className="text-gray-600 mb-6">Create your first quiz to get started!</p>
-                <div className="flex gap-4 justify-center">
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
                   <button
                     onClick={() => setView('create')}
-                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg transition-all flex items-center gap-2"
+                    className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg transition-all flex items-center justify-center gap-2"
                   >
                     <Brain size={20} />
                     AI Generate Quiz
                   </button>
                   <button
                     onClick={() => setView('custom-create')}
-                    className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-lg hover:shadow-lg transition-all flex items-center gap-2"
+                    className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-lg hover:shadow-lg transition-all flex items-center justify-center gap-2"
                   >
                     <Plus size={20} />
                     Create Custom Quiz
@@ -1637,7 +1637,7 @@ export const QuizPage: React.FC = () => {
                 </ul>
               </div>
 
-              <div className="flex gap-4">
+              <div className="flex flex-col md:flex-row gap-4">
                 <button
                   onClick={() => {
                     // Start the quiz
@@ -1660,18 +1660,20 @@ export const QuizPage: React.FC = () => {
                   <Play size={24} />
                   Start Quiz
                 </button>
-                <button
-                  onClick={() => handleNavWithGuard('create')}
-                  className="px-6 py-4 border border-gray-300 text-gray-900 font-semibold rounded-lg hover:bg-gray-50 transition-all"
-                >
-                  Generate Another
-                </button>
-                <button
-                  onClick={() => handleNavWithGuard('dashboard')}
-                  className="px-6 py-4 border border-gray-300 text-gray-900 font-semibold rounded-lg hover:bg-gray-50 transition-all"
-                >
-                  Back to Dashboard
-                </button>
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => handleNavWithGuard('create')}
+                    className="flex-1 px-6 py-4 border border-gray-300 text-gray-900 font-semibold rounded-lg hover:bg-gray-50 transition-all text-center"
+                  >
+                    Another
+                  </button>
+                  <button
+                    onClick={() => handleNavWithGuard('dashboard')}
+                    className="flex-1 px-6 py-4 border border-gray-300 text-gray-900 font-semibold rounded-lg hover:bg-gray-50 transition-all text-center"
+                  >
+                    Dashboard
+                  </button>
+                </div>
               </div>
             </div>
           </div>
