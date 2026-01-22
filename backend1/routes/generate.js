@@ -8,6 +8,8 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const Quiz = require('../models/Quiz');
 const Question = require('../models/Question');
 const User = require('../models/User');
+const { createQuestionBatch } = require('../utils/questionGenerator');
+const { filterContentForQuizGeneration, isBoilerplateSection } = require('../utils/contentFilter');
 
 // Optional dependencies - lazy loaded only when needed
 let Tesseract;
@@ -47,6 +49,7 @@ const educatorRoleMap = {
   'Vocational/Technical Student': 'a practical technical instructor focusing on applied skills and hands-on knowledge',
   'Other': 'a versatile educator adapting to the learner\'s level'
 };
+
 
 // Difficulty level definitions and guidelines
 const difficultyGuidelines = {
@@ -115,7 +118,17 @@ REQUIREMENTS:
 - Each question must have exactly 4 options (A, B, C, D)
 - Questions should be directly relevant to the provided content
 - Include a clear explanation for each correct answer that references the source material
-- Difficulty should match the specified level${subjectSpecificInstructions}
+- Difficulty should match the specified level
+
+STRICT CONSTRAINTS - DO NOT ASK QUESTIONS ABOUT:
+- Preface, foreword, or acknowledgements sections
+- Table of contents, indexes, or references
+- Learning outcomes, aims, objectives, or overview statements
+- "About the Author" or editor biographical sections
+- Copyright notices or publication metadata
+- Administrative or metadata sections of the document
+
+FOCUS ONLY on the main content and core study material.${subjectSpecificInstructions}
 
 Return ONLY valid JSON in this exact format with no additional text or markdown:
 {
@@ -202,6 +215,21 @@ router.post('/quiz', auth, async (req, res) => {
       } catch (fileError) {
         console.error('File processing error:', fileError);
         return res.status(400).json({ error: 'Failed to process uploaded file: ' + fileError.message });
+      }
+    }
+
+    // Apply content filter to remove boilerplate sections before AI processing
+    if (contentText && contentText.length > 500) {
+      try {
+        const filterResult = filterContentForQuizGeneration(contentText);
+        contentText = filterResult.extracted;
+        
+        if (filterResult.removed_sections && filterResult.removed_sections.length > 0) {
+          console.log('📌 Boilerplate sections removed:', filterResult.removed_sections.join(', '));
+          console.log(`📌 Content filtered: ${filterResult.original_length || 'unknown'} → ${contentText.length} chars`);
+        }
+      } catch (filterError) {
+        console.warn('⚠️ Content filtering error (using original):', filterError.message);
       }
     }
 
@@ -626,15 +654,17 @@ router.post('/quiz', auth, async (req, res) => {
 
     // ALWAYS SAVE TO DATABASE - This ensures quiz has a valid MongoDB ObjectId
     try {
-      // 1. Create Question documents
-      const questionDocs = await Question.insertMany(
-        mockQuiz.questions.map(q => ({
-          text: q.text,
-          options: q.options,
-          correctAnswer: q.correctAnswer,
-          explanation: q.explanation || '',
-        }))
-      );
+      // 1. Create Question documents using validator (supports multiple types)
+      let questionDocs;
+      try {
+        // Batch validate and create questions with type support
+        const validatedQuestions = createQuestionBatch(mockQuiz.questions, 'mcq_single');
+        questionDocs = await Question.insertMany(validatedQuestions);
+        console.log('Questions created with types:', validatedQuestions.map(q => q.type || 'mcq_single').join(', '));
+      } catch (validationError) {
+        console.error('Question validation error:', validationError.message);
+        throw new Error('Invalid question format: ' + validationError.message);
+      }
 
       // 2. Create Quiz document with ACTUAL subject from request
       const quiz = new Quiz({
@@ -656,6 +686,7 @@ router.post('/quiz', auth, async (req, res) => {
       console.log('Quiz title:', quiz.title);
       console.log('Quiz subject:', quiz.subject);
       console.log('Number of questions:', quiz.questions.length);
+      console.log('Question types:', quiz.questions.map(q => q.type || 'mcq_single').join(', '));
       console.log('AI Generated:', mockQuiz.isAIGenerated);
       console.log('================================');
 

@@ -5,6 +5,7 @@ const Question = require('../models/Question');
 const QuizResult = require('../models/QuizResult');
 const User = require('../models/User');
 const XpLog = require('../models/XpLog');
+const { scoreQuiz } = require('../utils/scoringEngine');
 
 const router = express.Router();
 
@@ -241,24 +242,17 @@ router.post('/:id/submit', auth, async (req, res) => {
       return res.status(400).json({ error: 'Answer count does not match question count' });
     }
 
-    // Calculate score
-    let correctCount = 0;
-    const detailedResults = quiz.questions.map((question, index) => {
-      const userAnswer = answers[index];
-      const isCorrect = userAnswer === question.correctAnswer;
-      if (isCorrect) correctCount++;
-      return {
-        questionId: question._id,
-        question: question.text,
-        userAnswer,
-        correctAnswer: question.correctAnswer,
-        isCorrect,
-        explanation: question.explanation,
-      };
-    });
+    // Use type-aware scoring engine
+    let scoringResult;
+    try {
+      scoringResult = scoreQuiz(quiz.questions, answers);
+      console.log('[submitQuiz] Scoring complete:', scoringResult.score, '/', scoringResult.totalQuestions);
+    } catch (scoringError) {
+      console.error('[submitQuiz] Scoring error:', scoringError.message);
+      return res.status(400).json({ error: 'Error scoring quiz: ' + scoringError.message });
+    }
 
-    const score = correctCount;
-    const percentage = Math.round((correctCount / quiz.questions.length) * 100);
+    const { score, percentage, detailedResults } = scoringResult;
 
     console.log('[submitQuiz] Score calculated:', score, '/', quiz.questions.length, '=', percentage + '%');
 
