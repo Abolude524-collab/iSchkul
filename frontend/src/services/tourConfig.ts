@@ -1,9 +1,10 @@
 import Shepherd from 'shepherd.js';
-import 'shepherd.js/dist/shepherd.css';
 
 /**
  * Onboarding tour configuration for new users
  * Guides them through key features of the app
+ * 
+ * CSS is imported globally in App.tsx to avoid Vite resolution issues
  */
 
 export const createAppTour = () => {

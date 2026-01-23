@@ -6,6 +6,8 @@ import { useServiceWorker, useSyncListener } from './hooks/useOfflineSupport';
 import { useTour } from './hooks/useTour';
 import { fullSync } from './services/syncManager';
 import { openDB } from './services/indexedDB';
+// Import Shepherd CSS first, then our custom theme
+import 'shepherd.js/dist/css/shepherd.css';
 import './styles/shepherd-theme.css';
 
 // Lazy load pages for better performance

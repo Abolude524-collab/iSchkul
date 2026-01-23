@@ -97,6 +97,9 @@ export default defineConfig({
       }
     })
   ],
+  optimizeDeps: {
+    include: ['shepherd.js']
+  },
   server: {
     port: 5173,
     proxy: {
