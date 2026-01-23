@@ -249,7 +249,7 @@ export const DashboardPage: React.FC = () => {
 
       <div className="flex-grow max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-12">
         {/* Welcome Section */}
-        <div className="mb-12">
+        <div className="mb-12" data-tour="dashboard-main">
           <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-2">
             Welcome back, {user?.name?.split(' ')[0]}!
           </h1>

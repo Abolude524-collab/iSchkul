@@ -3,8 +3,10 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { PageLoader } from './components/PageLoader';
 import { useAuthStore } from './services/store';
 import { useServiceWorker, useSyncListener } from './hooks/useOfflineSupport';
+import { useTour } from './hooks/useTour';
 import { fullSync } from './services/syncManager';
 import { openDB } from './services/indexedDB';
+import './styles/shepherd-theme.css';
 
 // Lazy load pages for better performance
 const LandingPage = React.lazy(() => import('./pages/LandingPage').then(module => ({ default: module.LandingPage })));
@@ -40,6 +42,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 function App() {
   const { user, token } = useAuthStore();
   const { swReady, updateAvailable, updateApp } = useServiceWorker();
+  const { startTour } = useTour(); // Initialize tour hook for new users
 
   // Initialize IndexedDB on app startup
   useEffect(() => {

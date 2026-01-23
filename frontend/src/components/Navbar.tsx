@@ -107,6 +107,12 @@ export const Navbar: React.FC = () => {
                 <Link
                   key={link.path}
                   to={link.path}
+                  data-tour={
+                    link.label === 'Leaderboard' ? 'leaderboard-nav' :
+                    link.label === 'Quiz' ? 'quiz-nav' :
+                    link.label === 'Flashcards' ? 'flashcards-nav' :
+                    undefined
+                  }
                   className={`transition-colors ${
                     isActive(link.path)
                       ? 'text-white font-semibold border-b-2 border-white pb-2'
@@ -145,6 +151,7 @@ export const Navbar: React.FC = () => {
                 <button
                   onClick={() => navigate('/profile')}
                   className="p-2 hover:bg-blue-700 rounded-full transition-colors"
+                  data-tour="profile-nav"
                   aria-label="Profile"
                 >
                   <User size={20} className="text-white" />
