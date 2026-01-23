@@ -3,6 +3,7 @@ const auth = require('../middleware/auth');
 const User = require('../models/User');
 const Leaderboard = require('../models/Leaderboard');
 const mongoose = require('mongoose');
+const { getAvatarUrl } = require('../middleware/avatarTransform');
 
 const router = express.Router();
 
@@ -180,7 +181,7 @@ router.get('/active', auth, async (req, res) => {
         total_xp: user.xp || 0,
         xp: user.xp || 0,
         level: user.level || 0,
-        avatar: user.avatar
+        avatar: getAvatarUrl(user.avatar)
       }));
 
     res.json({
@@ -248,7 +249,7 @@ router.get('/:id', auth, async (req, res) => {
       _id: user._id,
       name: user.name,
       username: user.username,
-      avatar: user.avatar,
+      avatar: getAvatarUrl(user.avatar),
       xp: user.xp,
       level: user.level
     }));

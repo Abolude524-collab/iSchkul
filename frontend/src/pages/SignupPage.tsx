@@ -69,7 +69,7 @@ export const SignupPage: React.FC = () => {
 
       const data = await response.json();
       login(data.user, data.token);
-      navigate('/dashboard');
+      navigate('/dashboard', { replace: true });
     } catch (err: any) {
       setError(err.message);
     } finally {

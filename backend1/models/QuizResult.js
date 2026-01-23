@@ -11,8 +11,9 @@ const quizResultSchema = new mongoose.Schema({
     ref: 'User',
     required: true,
   },
+  // Store raw submitted answers; can be numbers, arrays (for multi-select), or booleans
   answers: [{
-    type: Number,
+    type: mongoose.Schema.Types.Mixed,
     required: true,
   }],
   score: {
@@ -33,14 +34,22 @@ const quizResultSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  // Per-question breakdown to support multiple question types
   detailedResults: [{
     questionId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Question',
     },
+    questionType: String,
     question: String,
-    userAnswer: Number,
-    correctAnswer: Number,
+    // Accept mixed answer formats (number | array | boolean)
+    userAnswer: mongoose.Schema.Types.Mixed,
+    correctAnswer: mongoose.Schema.Types.Mixed,
+    correctAnswers: [mongoose.Schema.Types.Mixed],
+    selectedOption: String,
+    correctOption: String,
+    selectedOptions: [String],
+    correctOptions: [String],
     isCorrect: Boolean,
     explanation: String,
   }],

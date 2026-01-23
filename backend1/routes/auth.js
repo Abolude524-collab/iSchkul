@@ -2,6 +2,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const auth = require('../middleware/auth');
+const { transformUserAvatar } = require('../middleware/avatarTransform');
 
 const router = express.Router();
 
@@ -33,18 +34,19 @@ router.post('/register', async (req, res) => {
     console.log('JWT_SECRET length:', process.env.JWT_SECRET?.length);
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
+    const transformedUser = transformUserAvatar(user);
     res.status(201).json({
       token,
       user: {
-        id: user._id,
-        username: user.username,
-        email: user.email,
-        name: user.name,
-        studentCategory: user.studentCategory,
-        institution: user.institution,
-        avatar: user.avatar,
-        xp: user.xp,
-        level: user.level
+        id: transformedUser._id,
+        username: transformedUser.username,
+        email: transformedUser.email,
+        name: transformedUser.name,
+        studentCategory: transformedUser.studentCategory,
+        institution: transformedUser.institution,
+        avatar: transformedUser.avatar,
+        xp: transformedUser.xp,
+        level: transformedUser.level
       }
     });
   } catch (error) {
@@ -88,20 +90,21 @@ router.post('/login', async (req, res) => {
     // Generate token
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
+    const transformedUser = transformUserAvatar(user);
     res.json({
       token,
       user: {
-        id: user._id,
-        username: user.username,
-        email: user.email,
-        name: user.name,
-        studentCategory: user.studentCategory,
-        institution: user.institution,
-        isAdmin: user.isAdmin,
-        role: user.role,
-        avatar: user.avatar,
-        xp: user.xp,
-        level: user.level
+        id: transformedUser._id,
+        username: transformedUser.username,
+        email: transformedUser.email,
+        name: transformedUser.name,
+        studentCategory: transformedUser.studentCategory,
+        institution: transformedUser.institution,
+        isAdmin: transformedUser.isAdmin,
+        role: transformedUser.role,
+        avatar: transformedUser.avatar,
+        xp: transformedUser.xp,
+        level: transformedUser.level
       }
     });
   } catch (error) {
@@ -115,7 +118,8 @@ router.get('/me', auth, async (req, res) => {
   try {
     const userId = req.user._id || req.user.id;
     const user = await User.findById(userId).select('-password');
-    res.json({ user });
+    const transformedUser = transformUserAvatar(user);
+    res.json({ user: transformedUser });
   } catch (error) {
     console.error('Get me error:', error);
     res.status(500).json({ error: 'Server error', details: error.message });
@@ -141,7 +145,8 @@ router.put('/profile', auth, async (req, res) => {
       updateData,
       { new: true }
     ).select('-password');
-    res.json({ user });
+    const transformedUser = transformUserAvatar(user);
+    res.json({ user: transformedUser });
   } catch (error) {
     console.error('Update profile error:', error);
     res.status(500).json({ error: 'Server error', details: error.message });
@@ -168,7 +173,8 @@ router.post('/avatar', auth, upload.single('avatar'), async (req, res) => {
       { new: true }
     ).select('-password');
 
-    res.json({ user, avatarUrl: fileUrl });
+    const transformedUser = transformUserAvatar(user);
+    res.json({ user: transformedUser, avatarUrl: fileUrl });
   } catch (error) {
     console.error('Avatar upload error:', error);
     res.status(500).json({ error: 'Server error' });

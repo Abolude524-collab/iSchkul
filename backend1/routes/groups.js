@@ -3,6 +3,7 @@ const auth = require('../middleware/auth');
 const Group = require('../models/Group');
 const GroupMessage = require('../models/GroupMessage');
 const User = require('../models/User');
+const { transformGroupAvatar, transformMessageAvatar } = require('../middleware/avatarTransform');
 
 const router = express.Router();
 
@@ -68,21 +69,22 @@ router.post('/create', auth, async (req, res) => {
     await group.populate('members.user', 'name username avatar email');
     await group.populate('createdBy', 'name username');
 
+    const transformedGroup = transformGroupAvatar(group);
     res.status(201).json({
       success: true,
       group: {
-        _id: group._id,
-        name: group.name,
-        description: group.description,
-        category: group.category,
-        tags: group.tags,
-        avatar: group.avatar,
-        createdBy: group.createdBy,
-        members: group.members,
-        memberCount: group.memberCount,
-        settings: group.settings,
-        stats: group.stats,
-        createdAt: group.createdAt
+        _id: transformedGroup._id,
+        name: transformedGroup.name,
+        description: transformedGroup.description,
+        category: transformedGroup.category,
+        tags: transformedGroup.tags,
+        avatar: transformedGroup.avatar,
+        createdBy: transformedGroup.createdBy,
+        members: transformedGroup.members,
+        memberCount: transformedGroup.memberCount,
+        settings: transformedGroup.settings,
+        stats: transformedGroup.stats,
+        createdAt: transformedGroup.createdAt
       },
       message: cleanMemberIds.length > 0 ? `Group created with ${cleanMemberIds.length} member(s) added` : 'Group created successfully'
     });
@@ -109,21 +111,24 @@ router.get('/', auth, async (req, res) => {
     
     console.log(`Found ${groups.length} groups for user ${req.user._id}`);
 
-    const formattedGroups = groups.map(group => ({
-      _id: group._id,
-      name: group.name,
-      description: group.description,
-      category: group.category,
-      tags: group.tags,
-      avatar: group.avatar,
-      members: group.members,
-      memberCount: group.memberCount,
-      settings: group.settings,
-      stats: group.stats,
-      userRole: group.getMemberRole(req.user._id),
-      lastActivity: group.stats.lastActivity,
-      createdAt: group.createdAt
-    }));
+    const formattedGroups = groups.map(group => {
+      const transformed = transformGroupAvatar(group);
+      return {
+        _id: transformed._id,
+        name: transformed.name,
+        description: transformed.description,
+        category: transformed.category,
+        tags: transformed.tags,
+        avatar: transformed.avatar,
+        members: transformed.members,
+        memberCount: transformed.memberCount,
+        settings: transformed.settings,
+        stats: transformed.stats,
+        userRole: group.getMemberRole(req.user._id),
+        lastActivity: transformed.stats.lastActivity,
+        createdAt: transformed.createdAt
+      };
+    });
 
     res.json({ groups: formattedGroups });
   } catch (error) {
@@ -150,32 +155,33 @@ router.get('/:id', auth, async (req, res) => {
 
     const userRole = group.getMemberRole(req.user._id);
 
+    const transformedGroup = transformGroupAvatar(group);
     res.json({
       group: {
-        _id: group._id,
-        name: group.name,
-        description: group.description,
-        category: group.category,
-        tags: group.tags,
-        avatar: group.avatar,
-        coverImage: group.coverImage,
-        createdBy: group.createdBy,
-        members: group.members,
-        memberCount: group.memberCount,
-        inviteLink: group.inviteLink ? {
-          code: group.inviteLink.code,
-          expiresAt: group.inviteLink.expiresAt,
-          maxUses: group.inviteLink.maxUses,
-          usesCount: group.inviteLink.usesCount,
-          createdAt: group.inviteLink.createdAt
+        _id: transformedGroup._id,
+        name: transformedGroup.name,
+        description: transformedGroup.description,
+        category: transformedGroup.category,
+        tags: transformedGroup.tags,
+        avatar: transformedGroup.avatar,
+        coverImage: transformedGroup.coverImage,
+        createdBy: transformedGroup.createdBy,
+        members: transformedGroup.members,
+        memberCount: transformedGroup.memberCount,
+        inviteLink: transformedGroup.inviteLink ? {
+          code: transformedGroup.inviteLink.code,
+          expiresAt: transformedGroup.inviteLink.expiresAt,
+          maxUses: transformedGroup.inviteLink.maxUses,
+          usesCount: transformedGroup.inviteLink.usesCount,
+          createdAt: transformedGroup.inviteLink.createdAt
         } : null,
-        settings: group.settings,
-        stats: group.stats,
+        settings: transformedGroup.settings,
+        stats: transformedGroup.stats,
         userRole,
         canManageMembers: group.canManageMembers(req.user._id),
         isAdmin: group.isAdmin(req.user._id),
-        createdAt: group.createdAt,
-        updatedAt: group.updatedAt
+        createdAt: transformedGroup.createdAt,
+        updatedAt: transformedGroup.updatedAt
       }
     });
   } catch (error) {
@@ -212,17 +218,18 @@ router.put('/:id', auth, async (req, res) => {
     await group.save();
     await group.populate('members.user', 'name username avatar');
 
+    const transformedGroup = transformGroupAvatar(group);
     res.json({
       group: {
-        _id: group._id,
-        name: group.name,
-        description: group.description,
-        category: group.category,
-        tags: group.tags,
-        avatar: group.avatar,
-        coverImage: group.coverImage,
-        settings: group.settings,
-        updatedAt: group.updatedAt
+        _id: transformedGroup._id,
+        name: transformedGroup.name,
+        description: transformedGroup.description,
+        category: transformedGroup.category,
+        tags: transformedGroup.tags,
+        avatar: transformedGroup.avatar,
+        coverImage: transformedGroup.coverImage,
+        settings: transformedGroup.settings,
+        updatedAt: transformedGroup.updatedAt
       }
     });
   } catch (error) {
@@ -519,20 +526,23 @@ router.get('/:id/messages', auth, async (req, res) => {
     // Mark messages as read
     await GroupMessage.markGroupAsRead(req.params.id, req.user._id);
 
-    const formattedMessages = messages.reverse().map(message => ({
-      _id: message._id,
-      content: message.content,
-      sender: message.sender,
-      messageType: message.messageType,
-      attachments: message.attachments,
-      replyTo: message.replyTo,
-      reactions: message.reactions,
-      mentions: message.mentions,
-      readBy: message.readBy,
-      edited: message.edited,
-      createdAt: message.createdAt,
-      formattedTimestamp: message.formattedTimestamp
-    }));
+    const formattedMessages = messages.reverse().map(message => {
+      const transformed = transformMessageAvatar(message);
+      return {
+        _id: transformed._id,
+        content: transformed.content,
+        sender: transformed.sender,
+        messageType: transformed.messageType,
+        attachments: transformed.attachments,
+        replyTo: transformed.replyTo,
+        reactions: transformed.reactions,
+        mentions: transformed.mentions,
+        readBy: transformed.readBy,
+        edited: transformed.edited,
+        createdAt: transformed.createdAt,
+        formattedTimestamp: transformed.formattedTimestamp
+      };
+    });
 
     res.json({
       messages: formattedMessages,
@@ -570,33 +580,35 @@ router.post('/:id/messages', auth, async (req, res) => {
     await message.save();
     await message.populate('sender', 'name username avatar');
 
+    const transformedMessage = transformMessageAvatar(message);
+    
     // Emit to group members
     if (io) {
       io.to(group._id.toString()).emit('group-message', {
         groupId: group._id,
         message: {
-          _id: message._id,
-          content: message.content,
-          sender: message.sender,
-          messageType: message.messageType,
-          attachments: message.attachments,
-          replyTo: message.replyTo,
-          reactions: message.reactions,
-          createdAt: message.createdAt
+          _id: transformedMessage._id,
+          content: transformedMessage.content,
+          sender: transformedMessage.sender,
+          messageType: transformedMessage.messageType,
+          attachments: transformedMessage.attachments,
+          replyTo: transformedMessage.replyTo,
+          reactions: transformedMessage.reactions,
+          createdAt: transformedMessage.createdAt
         }
       });
     }
 
     res.status(201).json({
       message: {
-        _id: message._id,
-        content: message.content,
-        sender: message.sender,
-        messageType: message.messageType,
-        attachments: message.attachments,
-        replyTo: message.replyTo,
-        reactions: message.reactions,
-        createdAt: message.createdAt
+        _id: transformedMessage._id,
+        content: transformedMessage.content,
+        sender: transformedMessage.sender,
+        messageType: transformedMessage.messageType,
+        attachments: transformedMessage.attachments,
+        replyTo: transformedMessage.replyTo,
+        reactions: transformedMessage.reactions,
+        createdAt: transformedMessage.createdAt
       }
     });
   } catch (error) {

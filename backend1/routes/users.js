@@ -2,6 +2,7 @@ const express = require('express');
 const auth = require('../middleware/auth');
 const User = require('../models/User');
 const Badge = require('../models/Badge');
+const { transformUserAvatar, transformUsersAvatar } = require('../middleware/avatarTransform');
 
 const router = express.Router();
 
@@ -37,7 +38,8 @@ router.get('/search', auth, async (req, res) => {
     console.log('[User Search] Found', users.length, 'users matching query:', q);
     console.log('[User Search] Results:', users.map(u => ({ id: u._id, name: u.name, username: u.username, email: u.email })));
 
-    res.json({ users });
+    const transformedUsers = transformUsersAvatar(users);
+    res.json({ users: transformedUsers });
   } catch (error) {
     console.error('[User Search] Error:', error);
     res.status(500).json({ error: 'Server error', details: error.message });
@@ -52,7 +54,8 @@ router.get('/chat-profile', auth, async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-    res.json({ user, bio: user.chatAbout, status: user.chatAvatar });
+    const transformedUser = transformUserAvatar(user);
+    res.json({ user: transformedUser, bio: transformedUser.chatAbout, status: transformedUser.chatAvatar });
   } catch (error) {
     console.error('Get chat profile error:', error);
     res.status(500).json({ error: 'Server error', details: error.message });
@@ -74,7 +77,8 @@ router.put('/chat-profile', auth, async (req, res) => {
       updateData,
       { new: true }
     ).select('-password');
-    res.json({ user, bio: user.chatAbout, status: user.chatAvatar });
+    const transformedUser = transformUserAvatar(user);
+    res.json({ user: transformedUser, bio: transformedUser.chatAbout, status: transformedUser.chatAvatar });
   } catch (error) {
     console.error('Update chat profile error:', error);
     res.status(500).json({ error: 'Server error', details: error.message });
@@ -88,7 +92,8 @@ router.get('/:id', auth, async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-    res.json({ user });
+    const transformedUser = transformUserAvatar(user);
+    res.json({ user: transformedUser });
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
   }
@@ -101,7 +106,8 @@ router.get('/:id/chat-profile', auth, async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-    res.json({ user });
+    const transformedUser = transformUserAvatar(user);
+    res.json({ user: transformedUser });
   } catch (error) {
     console.error('Get user chat profile error:', error);
     res.status(500).json({ error: 'Server error' });
