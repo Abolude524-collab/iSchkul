@@ -326,12 +326,12 @@ export const CoReaderPage: React.FC = () => {
         >
             <>
                 {/* Floating Timer */}
-                <div className="fixed top-4 right-8 z-40 bg-white/90 backdrop-blur shadow-lg rounded-full px-4 py-2 flex items-center gap-3 border border-gray-200">
-                    <Timer size={20} className={isActive ? 'text-green-600 animate-pulse' : 'text-gray-500'} />
-                    <span className="font-mono font-medium text-lg text-gray-800">{formatTime(timeLeft)}</span>
+                <div className="fixed top-2 right-2 sm:top-4 sm:right-4 z-40 bg-white/90 backdrop-blur shadow-lg rounded-full px-2 py-1.5 sm:px-4 sm:py-2 flex items-center gap-1.5 sm:gap-3 border border-gray-200">
+                    <Timer size={16} className={`sm:w-5 sm:h-5 ${isActive ? 'text-green-600 animate-pulse' : 'text-gray-500'}`} />
+                    <span className="font-mono font-medium text-sm sm:text-lg text-gray-800">{formatTime(timeLeft)}</span>
                     <button
                         onClick={isActive ? pauseTimer : startTimer}
-                        className={`text-xs px-3 py-1 rounded-full font-medium transition-colors ${isActive
+                        className={`text-[10px] sm:text-xs px-2 py-0.5 sm:px-3 sm:py-1 rounded-full font-medium transition-colors ${isActive
                                 ? 'bg-red-100 text-red-600 hover:bg-red-200'
                                 : 'bg-green-100 text-green-600 hover:bg-green-200'
                             }`}
@@ -342,19 +342,19 @@ export const CoReaderPage: React.FC = () => {
                         onClick={resetTimer}
                         className="text-gray-400 hover:text-gray-600"
                     >
-                        <X size={16} />
+                        <X size={14} className="sm:w-4 sm:h-4" />
                     </button>
                 </div>
 
                 {isLoadingDocument ? (
-                    <div className="flex flex-col items-center justify-center h-96">
-                        <div className="w-12 h-12 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin mb-4"></div>
-                        <p className="text-gray-500">Loading document...</p>
+                    <div className="flex flex-col items-center justify-center h-96 px-4">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin mb-4"></div>
+                        <p className="text-sm sm:text-base text-gray-500">Loading document...</p>
                     </div>
                 ) : documentError ? (
-                    <div className="flex flex-col items-center justify-center h-96 bg-red-50 rounded-lg border border-red-200">
-                        <AlertCircle className="text-red-500 mb-2" size={32} />
-                        <p className="text-red-700 font-semibold">{documentError}</p>
+                    <div className="flex flex-col items-center justify-center h-96 bg-red-50 rounded-lg border border-red-200 m-2 sm:m-0 px-4">
+                        <AlertCircle className="text-red-500 mb-2" size={24} />
+                        <p className="text-sm sm:text-base text-red-700 font-semibold text-center">{documentError}</p>
                     </div>
                 ) : fileType === 'docx' ? (
                     <DocxViewer
@@ -370,40 +370,40 @@ export const CoReaderPage: React.FC = () => {
 
                 {/* Brain Break Modal */}
                 {isBreak && (
-                    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-8 m-4 relative animate-in fade-in zoom-in duration-300">
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-2 sm:p-4">
+                        <div className="bg-white rounded-xl sm:rounded-2xl shadow-2xl w-full max-w-2xl p-4 sm:p-6 md:p-8 relative animate-in fade-in zoom-in duration-300 max-h-[95vh] overflow-y-auto">
                             <button
                                 onClick={() => setIsBreak(false)}
-                                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+                                className="absolute top-2 right-2 sm:top-4 sm:right-4 text-gray-400 hover:text-gray-600 z-10"
                             >
-                                <X size={24} />
+                                <X size={20} className="sm:w-6 sm:h-6" />
                             </button>
 
-                            <div className="text-center mb-8">
-                                <div className="inline-flex items-center justify-center w-16 h-16 bg-purple-100 text-purple-600 rounded-full mb-4">
-                                    <Brain size={32} />
+                            <div className="text-center mb-6 sm:mb-8">
+                                <div className="inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 bg-purple-100 text-purple-600 rounded-full mb-3 sm:mb-4">
+                                    <Brain size={24} className="sm:w-8 sm:h-8" />
                                 </div>
-                                <h2 className="text-3xl font-bold text-gray-800">Brain Break!</h2>
-                                <p className="text-gray-600 mt-2">Time to test your retention from the last 25 minutes.</p>
+                                <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800">Brain Break!</h2>
+                                <p className="text-sm sm:text-base text-gray-600 mt-1 sm:mt-2 px-2">Time to test your retention from the last 25 minutes.</p>
                             </div>
 
                             {quizLoading ? (
-                                <div className="flex flex-col items-center justify-center py-12">
-                                    <div className="w-10 h-10 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin mb-4"></div>
-                                    <p className="text-gray-500">Generating personalized quiz...</p>
+                                <div className="flex flex-col items-center justify-center py-8 sm:py-12">
+                                    <div className="w-8 h-8 sm:w-10 sm:h-10 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin mb-3 sm:mb-4"></div>
+                                    <p className="text-sm sm:text-base text-gray-500">Generating personalized quiz...</p>
                                 </div>
                             ) : quiz && quiz.questions.length > 0 ? (
-                                <div className="space-y-6">
-                                    <div className="flex justify-between items-center text-sm text-gray-500 font-medium">
+                                <div className="space-y-4 sm:space-y-6">
+                                    <div className="flex flex-wrap justify-between items-center gap-2 text-xs sm:text-sm text-gray-500 font-medium">
                                         <span>Question {currentQuestionIdx + 1} of {quiz.questions.length}</span>
-                                        <span className="bg-gray-100 px-2 py-1 rounded">Difficulty: Medium</span>
+                                        <span className="bg-gray-100 px-2 py-1 rounded text-xs">Difficulty: Medium</span>
                                     </div>
 
-                                    <h3 className="text-xl font-semibold text-gray-900">
+                                    <h3 className="text-base sm:text-lg md:text-xl font-semibold text-gray-900">
                                         {quiz.questions[currentQuestionIdx].question}
                                     </h3>
 
-                                    <div className="space-y-3">
+                                    <div className="space-y-2 sm:space-y-3">
                                         {quiz.questions[currentQuestionIdx].options.map((option, idx) => {
                                             const isSelected = selectedOption === option;
                                             const isCorrect = option === quiz.questions[currentQuestionIdx].correctAnswer; // Assuming exact match string 
@@ -411,7 +411,7 @@ export const CoReaderPage: React.FC = () => {
                                             // The backend logic returning "A" vs string value needs alignment.
                                             // Let's assume options are strings and correctAnswer is the STRING value for simplicity here.
 
-                                            let btnClass = "w-full p-4 rounded-xl border-2 text-left transition-all relative ";
+                                            let btnClass = "w-full p-3 sm:p-4 rounded-lg sm:rounded-xl border-2 text-left text-sm sm:text-base transition-all relative ";
                                             if (showExplanation) {
                                                 if (option === quiz.questions[currentQuestionIdx].correctAnswer) {
                                                     btnClass += "border-green-500 bg-green-50 text-green-700";
@@ -431,13 +431,13 @@ export const CoReaderPage: React.FC = () => {
                                                     disabled={showExplanation}
                                                     className={btnClass}
                                                 >
-                                                    <span className="font-semibold mr-3">{String.fromCharCode(65 + idx)}.</span>
-                                                    {option}
+                                                    <span className="font-semibold mr-2 sm:mr-3 text-sm sm:text-base">{String.fromCharCode(65 + idx)}.</span>
+                                                    <span className="pr-8">{option}</span>
                                                     {showExplanation && option === quiz.questions[currentQuestionIdx].correctAnswer && (
-                                                        <CheckCircle className="absolute right-4 top-1/2 -translate-y-1/2 text-green-600" size={20} />
+                                                        <CheckCircle className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 text-green-600" size={18} />
                                                     )}
                                                     {showExplanation && isSelected && option !== quiz.questions[currentQuestionIdx].correctAnswer && (
-                                                        <AlertCircle className="absolute right-4 top-1/2 -translate-y-1/2 text-red-600" size={20} />
+                                                        <AlertCircle className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 text-red-600" size={18} />
                                                     )}
                                                 </button>
                                             );
@@ -445,24 +445,24 @@ export const CoReaderPage: React.FC = () => {
                                     </div>
 
                                     {showExplanation && (
-                                        <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 text-blue-800 animate-in fade-in slide-in-from-top-2">
-                                            <p className="font-semibold mb-1">Explanation:</p>
-                                            <p>{quiz.questions[currentQuestionIdx].explanation}</p>
+                                        <div className="bg-blue-50 p-3 sm:p-4 rounded-lg sm:rounded-xl border border-blue-100 text-blue-800 animate-in fade-in slide-in-from-top-2">
+                                            <p className="font-semibold mb-1 text-sm sm:text-base">Explanation:</p>
+                                            <p className="text-sm sm:text-base">{quiz.questions[currentQuestionIdx].explanation}</p>
                                         </div>
                                     )}
 
                                     {showExplanation && (
                                         <button
                                             onClick={handleNextQuestion}
-                                            className="w-full py-3 bg-gray-900 text-white rounded-xl font-semibold hover:bg-gray-800 transition-colors"
+                                            className="w-full py-2.5 sm:py-3 bg-gray-900 text-white rounded-lg sm:rounded-xl text-sm sm:text-base font-semibold hover:bg-gray-800 transition-colors"
                                         >
                                             {currentQuestionIdx < quiz.questions.length - 1 ? 'Next Question' : 'Finish Quiz'}
                                         </button>
                                     )}
                                 </div>
                             ) : (
-                                <div className="text-center py-10 text-red-500">
-                                    <p>Failed to load quiz. Please try again later.</p>
+                                <div className="text-center py-8 sm:py-10 text-red-500 px-4">
+                                    <p className="text-sm sm:text-base">Failed to load quiz. Please try again later.</p>
                                 </div>
                             )}
                         </div>

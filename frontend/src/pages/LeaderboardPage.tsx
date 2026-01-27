@@ -99,13 +99,13 @@ export const LeaderboardPage: React.FC = () => {
   const getRankIcon = (rank: number) => {
     switch (rank) {
       case 1:
-        return <Crown className="text-yellow-500" size={20} />;
+        return <Crown className="text-yellow-500 w-4 h-4 sm:w-5 sm:h-5" />;
       case 2:
-        return <Medal className="text-gray-400" size={20} />;
+        return <Medal className="text-gray-400 w-4 h-4 sm:w-5 sm:h-5" />;
       case 3:
-        return <Award className="text-amber-600" size={20} />;
+        return <Award className="text-amber-600 w-4 h-4 sm:w-5 sm:h-5" />;
       default:
-        return <span className="text-gray-500 font-bold">#{rank}</span>;
+        return <span className="text-gray-500 font-bold text-xs sm:text-sm">#{rank}</span>;
     }
   };
 
@@ -138,13 +138,13 @@ export const LeaderboardPage: React.FC = () => {
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Navbar />
 
-      <div className="flex-grow max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-12">
+      <div className="flex-grow max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-12">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 mb-2 sm:mb-4">
             🏆 Leaderboards
           </h1>
-          <p className="text-gray-600 text-lg">
+          <p className="text-gray-600 text-sm sm:text-base md:text-lg">
             Compete with fellow students and climb the ranks!
           </p>
         </div>
@@ -157,24 +157,24 @@ export const LeaderboardPage: React.FC = () => {
 
         {/* Global Leaderboard Section */}
         {globalLeaderboard && (
-          <div className="mb-12">
-            <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-xl p-6 text-white mb-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-2xl font-bold mb-2">{globalLeaderboard.title}</h2>
-                  <p className="text-purple-100 mb-4">{globalLeaderboard.description}</p>
-                  <div className="flex items-center gap-4 text-sm">
+          <div className="mb-8 sm:mb-12">
+            <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-xl p-4 sm:p-6 text-white mb-4 sm:mb-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="w-full sm:w-auto">
+                  <h2 className="text-xl sm:text-2xl font-bold mb-2">{globalLeaderboard.title}</h2>
+                  <p className="text-purple-100 mb-3 sm:mb-4 text-sm sm:text-base">{globalLeaderboard.description}</p>
+                  <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs sm:text-sm">
                     <div className="flex items-center gap-1">
-                      <Calendar size={16} />
-                      <span>Ends {new Date(globalLeaderboard.endDate).toLocaleDateString()}</span>
+                      <Calendar size={14} className="sm:w-4 sm:h-4" />
+                      <span className="whitespace-nowrap">Ends {new Date(globalLeaderboard.endDate).toLocaleDateString()}</span>
                     </div>
                     <div className="flex items-center gap-1">
-                      <Users size={16} />
+                      <Users size={14} className="sm:w-4 sm:h-4" />
                       <span>{globalLeaderboard.rankings?.length || 0} participants</span>
                     </div>
                   </div>
                 </div>
-                <div className="text-right">
+                <div className="w-full sm:w-auto sm:text-right">
                   {globalLeaderboard.prizes.length > 0 && (
                     <div className="mb-4">
                       <h3 className="font-semibold mb-2">Prizes:</h3>
@@ -191,14 +191,14 @@ export const LeaderboardPage: React.FC = () => {
                   {!isParticipating ? (
                     <button
                       onClick={handleJoinGlobalLeaderboard}
-                      className="bg-white text-purple-600 px-6 py-2 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
+                      className="w-full sm:w-auto bg-white text-purple-600 px-4 sm:px-6 py-2 rounded-lg text-sm sm:text-base font-semibold hover:bg-gray-100 transition-colors"
                     >
                       Join Competition
                     </button>
                   ) : (
                     <button
                       onClick={handleLeaveGlobalLeaderboard}
-                      className="bg-red-500 text-white px-6 py-2 rounded-lg font-semibold hover:bg-red-600 transition-colors"
+                      className="w-full sm:w-auto bg-red-500 text-white px-4 sm:px-6 py-2 rounded-lg text-sm sm:text-base font-semibold hover:bg-red-600 transition-colors"
                     >
                       Leave Competition
                     </button>
@@ -209,21 +209,21 @@ export const LeaderboardPage: React.FC = () => {
 
             {/* Global Leaderboard Rankings */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-              <div className="p-6 border-b border-gray-200">
-                <h3 className="text-xl font-bold text-gray-900">Current Rankings</h3>
+              <div className="p-4 sm:p-6 border-b border-gray-200">
+                <h3 className="text-lg sm:text-xl font-bold text-gray-900">Current Rankings</h3>
               </div>
               <div className="divide-y divide-gray-200">
               {globalLeaderboard.rankings?.slice(0, 10).map((entry, idx) => (
-                <div key={`global-${entry.id}-${idx}`} className={`p-4 flex items-center gap-4 ${entry.id === user?.id ? 'bg-blue-50' : ''}`}>
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${getRankBadgeColor(entry.rank)}`}>
+                <div key={`global-${entry.id}-${idx}`} className={`p-3 sm:p-4 flex items-center gap-2 sm:gap-4 ${entry.id === user?.id ? 'bg-blue-50' : ''}`}>
+                    <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ${getRankBadgeColor(entry.rank)}`}>
                       {getRankIcon(entry.rank)}
                     </div>
-                    <div className="flex-grow">
-                      <p className="font-semibold text-gray-900">{entry.name}</p>
-                      <p className="text-sm text-gray-500">{entry.total_xp} XP earned</p>
+                    <div className="flex-grow min-w-0">
+                      <p className="font-semibold text-gray-900 text-sm sm:text-base truncate">{entry.name}</p>
+                      <p className="text-xs sm:text-sm text-gray-500">{entry.total_xp} XP earned</p>
                     </div>
                     {entry.id === user?.id && (
-                      <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-full">
+                      <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-full whitespace-nowrap flex-shrink-0">
                         You
                       </span>
                     )}
@@ -235,10 +235,10 @@ export const LeaderboardPage: React.FC = () => {
         )}
 
         {/* Tab Navigation */}
-        <div className="flex gap-1 mb-6">
+        <div className="flex gap-1 mb-4 sm:mb-6">
           <button
             onClick={() => setActiveTab('all-time')}
-            className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
+            className={`flex-1 sm:flex-none px-4 sm:px-6 py-2 sm:py-3 rounded-lg text-sm sm:text-base font-semibold transition-colors ${
               activeTab === 'all-time'
                 ? 'bg-blue-600 text-white'
                 : 'bg-white text-gray-600 hover:bg-gray-100'
@@ -248,7 +248,7 @@ export const LeaderboardPage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('global')}
-            className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
+            className={`flex-1 sm:flex-none px-4 sm:px-6 py-2 sm:py-3 rounded-lg text-sm sm:text-base font-semibold transition-colors ${
               activeTab === 'global'
                 ? 'bg-blue-600 text-white'
                 : 'bg-white text-gray-600 hover:bg-gray-100'
@@ -261,29 +261,29 @@ export const LeaderboardPage: React.FC = () => {
         {/* All-Time Leaderboard */}
         {activeTab === 'all-time' && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xl font-bold text-gray-900">All-Time Leaderboard</h3>
+            <div className="p-4 sm:p-6 border-b border-gray-200">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
+                <h3 className="text-lg sm:text-xl font-bold text-gray-900">All-Time Leaderboard</h3>
                 {userRank && (
-                  <div className="text-right">
-                    <p className="text-sm text-gray-500">Your Rank</p>
-                    <p className="text-2xl font-bold text-blue-600">#{userRank.rank}</p>
+                  <div className="text-left sm:text-right">
+                    <p className="text-xs sm:text-sm text-gray-500">Your Rank</p>
+                    <p className="text-xl sm:text-2xl font-bold text-blue-600">#{userRank.rank}</p>
                   </div>
                 )}
               </div>
             </div>
             <div className="divide-y divide-gray-200">
               {leaderboard.slice(0, 20).map((entry, idx) => (
-                <div key={`alltime-${entry.id}-${idx}`} className={`p-4 flex items-center gap-4 ${entry.id === user?.id ? 'bg-blue-50' : ''}`}>
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${getRankBadgeColor(entry.rank)}`}>
+                <div key={`alltime-${entry.id}-${idx}`} className={`p-3 sm:p-4 flex items-center gap-2 sm:gap-4 ${entry.id === user?.id ? 'bg-blue-50' : ''}`}>
+                  <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ${getRankBadgeColor(entry.rank)}`}>
                     {getRankIcon(entry.rank)}
                   </div>
-                  <div className="flex-grow">
-                    <p className="font-semibold text-gray-900">{entry.name}</p>
-                    <p className="text-sm text-gray-500">{entry.institution}</p>
+                  <div className="flex-grow min-w-0">
+                    <p className="font-semibold text-gray-900 text-sm sm:text-base truncate">{entry.name}</p>
+                    <p className="text-xs sm:text-sm text-gray-500 truncate">{entry.institution}</p>
                   </div>
-                  <div className="text-right">
-                    <p className="font-bold text-gray-900">{entry.total_xp} XP</p>
+                  <div className="text-right flex-shrink-0">
+                    <p className="font-bold text-gray-900 text-sm sm:text-base">{entry.total_xp} XP</p>
                     {entry.id === user?.id && (
                       <span className="text-xs text-blue-600 font-semibold">You</span>
                     )}
@@ -296,31 +296,31 @@ export const LeaderboardPage: React.FC = () => {
 
         {/* Global Competition Tab */}
         {activeTab === 'global' && (
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             {!globalLeaderboard ? (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-                <Trophy size={64} className="text-gray-300 mx-auto mb-4" />
-                <h3 className="text-xl font-bold text-gray-900 mb-2">No Active Competition</h3>
-                <p className="text-gray-600">Check back later for upcoming leaderboard competitions!</p>
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 sm:p-12 text-center">
+                <Trophy size={48} className="text-gray-300 mx-auto mb-4 sm:w-16 sm:h-16" />
+                <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">No Active Competition</h3>
+                <p className="text-sm sm:text-base text-gray-600">Check back later for upcoming leaderboard competitions!</p>
               </div>
             ) : (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="p-6 border-b border-gray-200">
-                  <h3 className="text-xl font-bold text-gray-900">Competition Rankings</h3>
-                  <p className="text-gray-600 mt-1">XP earned during the competition period</p>
+                <div className="p-4 sm:p-6 border-b border-gray-200">
+                  <h3 className="text-lg sm:text-xl font-bold text-gray-900">Competition Rankings</h3>
+                  <p className="text-xs sm:text-sm text-gray-600 mt-1">XP earned during the competition period</p>
                 </div>
                 <div className="divide-y divide-gray-200">
                   {globalLeaderboard.rankings?.map((entry, idx) => (
-                    <div key={`comp-${entry.id}-${idx}`} className={`p-4 flex items-center gap-4 ${entry.id === user?.id ? 'bg-blue-50' : ''}`}>
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${getRankBadgeColor(entry.rank)}`}>
+                    <div key={`comp-${entry.id}-${idx}`} className={`p-3 sm:p-4 flex items-center gap-2 sm:gap-4 ${entry.id === user?.id ? 'bg-blue-50' : ''}`}>
+                      <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ${getRankBadgeColor(entry.rank)}`}>
                         {getRankIcon(entry.rank)}
                       </div>
-                      <div className="flex-grow">
-                        <p className="font-semibold text-gray-900">{entry.name}</p>
-                        <p className="text-sm text-gray-500">{entry.total_xp} XP earned</p>
+                      <div className="flex-grow min-w-0">
+                        <p className="font-semibold text-gray-900 text-sm sm:text-base truncate">{entry.name}</p>
+                        <p className="text-xs sm:text-sm text-gray-500">{entry.total_xp} XP earned</p>
                       </div>
                       {entry.id === user?.id && (
-                        <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-full">
+                        <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-full whitespace-nowrap flex-shrink-0">
                           You
                         </span>
                       )}

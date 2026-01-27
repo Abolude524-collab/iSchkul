@@ -275,7 +275,7 @@ export const XpHistoryPage: React.FC = () => {
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
                 {badges.map((badge, idx) => (
                   <div 
-                    key={idx} 
+                    key={`badge-${badge.name || badge.icon}-${idx}`} 
                     className={`rounded-xl p-4 flex flex-col items-center text-center hover:scale-105 transition-transform ${
                       badge.type === 'sotw' 
                         ? 'bg-gradient-to-br from-yellow-500 to-orange-600 border-2 border-yellow-300 shadow-lg shadow-yellow-500/50' 
@@ -333,11 +333,11 @@ export const XpHistoryPage: React.FC = () => {
                 Activity Breakdown
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {stats.byActivityType.map((activity) => {
+                {stats.byActivityType.map((activity, index) => {
                   const config = getActivityConfig(activity.activityType);
                   return (
                     <div
-                      key={activity.activityType}
+                      key={`activity-${activity.activityType}-${index}`}
                       className="bg-slate-700 rounded-lg p-4 flex items-center justify-between"
                     >
                       <div className="flex items-center gap-3">
@@ -370,11 +370,11 @@ export const XpHistoryPage: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-3">
-                {logs.map((log) => {
+                {logs.map((log, index) => {
                   const config = getActivityConfig(log.activityType);
                   return (
                     <div
-                      key={log.id}
+                      key={`log-${log.id || log.timestamp}-${index}`}
                       className="bg-slate-700 rounded-lg p-4 flex items-center justify-between hover:bg-slate-600 transition"
                     >
                       <div className="flex items-center gap-4">

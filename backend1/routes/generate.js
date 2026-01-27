@@ -98,10 +98,10 @@ const difficultyGuidelines = {
 // Helper function to build prompt with subject-specific requirements
 function buildQuizPrompt(numQuestions, difficulty, contentText, subject, studentCategory, educatorRole) {
   const diffGuideline = difficultyGuidelines[difficulty] || difficultyGuidelines['medium'];
-  
+
   // Special handling for math/calculation subjects
   const isMathSubject = subject && /math|calculation|algebra|geometry|trigonometry|calculus|statistics|physics|chemistry/i.test(subject);
-  
+
   let subjectSpecificInstructions = '';
   if (isMathSubject) {
     subjectSpecificInstructions = `
@@ -190,7 +190,7 @@ router.post('/quiz', auth, async (req, res) => {
         if (file.mimetype === 'application/pdf') {
           const data = await pdfParse(buffer);
           contentText = data.text;
-          
+
           // If PDF appears to be scanned (very little text), use OCR if available
           if (contentText.trim().length < 100) {
             console.log('Detected scanned PDF, attempting OCR...');
@@ -204,32 +204,32 @@ router.post('/quiz', auth, async (req, res) => {
           }
         } else if (file.mimetype === 'text/plain') {
           contentText = buffer.toString('utf8');
-        } else if (file.mimetype === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' || 
-                   file.filename?.endsWith('.pptx')) {
+        } else if (file.mimetype === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+          file.filename?.endsWith('.pptx')) {
           // PPTX file handling
           const ZipLib = await loadJSZip();
           if (ZipLib) {
             contentText = await extractTextFromPPTX(buffer);
           } else {
-            return res.status(400).json({ 
-              error: 'PPTX support not installed. Install with: npm install jszip' 
+            return res.status(400).json({
+              error: 'PPTX support not installed. Install with: npm install jszip'
             });
           }
-        } else if (file.mimetype === 'image/png' || file.mimetype === 'image/jpeg' || 
-                   file.mimetype === 'image/jpg' || file.mimetype === 'image/webp') {
+        } else if (file.mimetype === 'image/png' || file.mimetype === 'image/jpeg' ||
+          file.mimetype === 'image/jpg' || file.mimetype === 'image/webp') {
           // Image files - use OCR
           console.log('Processing image file with OCR...');
           const Tesseract = await loadOCR();
           if (Tesseract) {
             contentText = await extractTextWithOCR(buffer, file.filename);
           } else {
-            return res.status(400).json({ 
-              error: 'OCR support not installed. Install optional dependencies: npm install tesseract.js' 
+            return res.status(400).json({
+              error: 'OCR support not installed. Install optional dependencies: npm install tesseract.js'
             });
           }
         } else {
-          return res.status(400).json({ 
-            error: 'Unsupported file type. Supported types: PDF, PPTX, TXT, JPG, PNG, WEBP' 
+          return res.status(400).json({
+            error: 'Unsupported file type. Supported types: PDF, PPTX, TXT, JPG, PNG, WEBP'
           });
         }
       } catch (fileError) {
@@ -243,7 +243,7 @@ router.post('/quiz', auth, async (req, res) => {
       try {
         const filterResult = filterContentForQuizGeneration(contentText);
         contentText = filterResult.extracted;
-        
+
         if (filterResult.removed_sections && filterResult.removed_sections.length > 0) {
           console.log('📌 Boilerplate sections removed:', filterResult.removed_sections.join(', '));
           console.log(`📌 Content filtered: ${filterResult.original_length || 'unknown'} → ${contentText.length} chars`);
@@ -399,7 +399,7 @@ router.post('/quiz', auth, async (req, res) => {
           if (sentence.length > 30) {
             // Randomly pick a question type for the sentence-based question
             const typeValue = Math.random();
-            
+
             if (typeValue < 0.2) { // 20% True/False
               templates.push({
                 type: 'true_false',
@@ -673,33 +673,53 @@ router.post('/quiz', auth, async (req, res) => {
 // Generate flashcards
 router.post('/flashcards', auth, async (req, res) => {
   try {
-    const { text, subject } = req.body;
+    const { text, subject, numCards = 10 } = req.body;
 
     if (!text) {
       return res.status(400).json({ error: 'Text content is required' });
     }
 
-    // Mock flashcard generation
-    const mockFlashcards = {
-      _id: Date.now().toString(),
-      title: `${subject || 'General'} Flashcards`,
-      cards: [
-        {
-          id: '1',
-          front: 'What is photosynthesis?',
-          back: 'The process by which plants convert sunlight, carbon dioxide, and water into glucose and oxygen.'
-        },
-        {
-          id: '2',
-          front: 'What is the powerhouse of the cell?',
-          back: 'Mitochondria'
-        }
-      ],
-      createdAt: new Date().toISOString(),
-      createdBy: req.user._id
-    };
+    console.log(`[generate] AI flashcard generation for subject: ${subject}`);
+    const { generateFlashcardsFromText } = require('../utils/flashcardGen');
 
-    res.json({ flashcards: mockFlashcards });
+    let cards = [];
+    try {
+      cards = await generateFlashcardsFromText(text, parseInt(numCards));
+    } catch (aiError) {
+      console.error('[generate] AI flashcard error:', aiError);
+      // Fallback is already handled inside generateFlashcardsFromText
+    }
+
+    if (!cards || cards.length === 0) {
+      return res.status(500).json({ error: 'Failed to generate flashcards' });
+    }
+
+    // Award XP for generation
+    const xpReward = 5;
+    try {
+      await User.findByIdAndUpdate(req.user._id, {
+        $inc: { xp: xpReward, total_xp: xpReward }
+      });
+    } catch (xpError) {
+      console.error('[generate] Failed to award flashcard XP:', xpError.message);
+    }
+
+    // Return the structure expected by the mobile app (and now resilient to both)
+    res.json({
+      success: true,
+      xpAwarded: xpReward,
+      flashcards: {
+        _id: Date.now().toString(),
+        title: `${subject || 'General'} Flashcards`,
+        cards: cards.map((c, i) => ({
+          id: (i + 1).toString(),
+          front: c.question || c.front,
+          back: c.answer || c.back
+        })),
+        createdAt: new Date().toISOString(),
+        createdBy: req.user._id
+      }
+    });
   } catch (error) {
     console.error('Flashcard generation error:', error);
     res.status(500).json({ error: 'Server error' });
@@ -719,13 +739,13 @@ async function extractTextFromPPTX(buffer) {
     if (!ZipLib) {
       throw new Error('PPTX support requires: npm install jszip');
     }
-    
+
     console.log('[generate] Loading PPTX with jszip...');
     const zip = new ZipLib();
     await zip.loadAsync(buffer);
-    
+
     let allText = [];
-    
+
     // Get all slide files from ppt/slides/ directory
     const slideFiles = [];
     zip.folder('ppt/slides')?.forEach((relativePath, file) => {
@@ -733,16 +753,16 @@ async function extractTextFromPPTX(buffer) {
         slideFiles.push({ path: relativePath, file });
       }
     });
-    
+
     console.log(`[generate] Found ${slideFiles.length} slides`);
-    
+
     // Sort slides by number to maintain order
     slideFiles.sort((a, b) => {
       const numA = parseInt(a.path.match(/\d+/) || [0]);
       const numB = parseInt(b.path.match(/\d+/) || [0]);
       return numA - numB;
     });
-    
+
     // Extract text from each slide
     for (const { path: slidePath, file } of slideFiles) {
       try {
@@ -755,7 +775,7 @@ async function extractTextFromPPTX(buffer) {
         console.warn(`[generate] Error parsing slide ${slidePath}:`, slideErr.message);
       }
     }
-    
+
     const result = allText.join('\n').trim();
     console.log(`[generate] Extracted ${result.length} characters from PPTX`);
     return result || 'No text found in presentation';
@@ -795,18 +815,18 @@ async function extractTextWithOCR(buffer, filename) {
     if (!Tesseract) {
       throw new Error('OCR (Tesseract.js) not available. Install with: npm install tesseract.js');
     }
-    
+
     console.log(`Starting OCR process for: ${filename}`);
-    
+
     // Save buffer to temporary file for OCR
     const tempDir = path.join(__dirname, '..', 'temp_uploads');
     if (!fs.existsSync(tempDir)) {
       fs.mkdirSync(tempDir, { recursive: true });
     }
-    
+
     const imagePath = path.join(tempDir, `ocr_${Date.now()}.png`);
     fs.writeFileSync(imagePath, buffer);
-    
+
     // Run Tesseract OCR
     console.log('Running Tesseract OCR...');
     const { data: { text } } = await Tesseract.recognize(
@@ -820,12 +840,12 @@ async function extractTextWithOCR(buffer, filename) {
         }
       }
     );
-    
+
     // Clean up temporary file
     if (fs.existsSync(imagePath)) {
       fs.unlinkSync(imagePath);
     }
-    
+
     console.log(`OCR completed. Extracted ${text.length} characters`);
     return text || 'No text could be extracted from image';
   } catch (error) {
@@ -850,9 +870,9 @@ function isValidFileType(mimetype, filename) {
     'image/jpg',
     'image/webp'
   ];
-  
+
   const supportedExtensions = ['.pdf', '.txt', '.pptx', '.png', '.jpg', '.jpeg', '.webp'];
-  
+
   const ext = path.extname(filename).toLowerCase();
   return supportedTypes.includes(mimetype) || supportedExtensions.includes(ext);
 }

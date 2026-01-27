@@ -47,11 +47,47 @@ router.post('/create', auth, async (req, res) => {
 
     await quiz.save();
 
+    // Award XP for quiz creation (based on number of questions)
+    const xpAmount = Math.min(Math.floor(questions.length * 2), 50); // 2 XP per question, max 50
+    
+    try {
+      console.log('[createQuiz] Awarding XP:', xpAmount, 'for', questions.length, 'questions');
+      
+      // Create XP log entry
+      await XpLog.create({
+        user_id: req.user._id,
+        xp_earned: xpAmount,
+        activity_type: 'QUIZ_CREATED',
+        metadata: {
+          quizId: quiz._id.toString(),
+          quizTitle: quiz.title,
+          questionCount: questions.length,
+          description: `Created quiz with ${questions.length} questions`
+        }
+      });
+
+      // Update user XP
+      const updatedUser = await User.findByIdAndUpdate(
+        req.user._id,
+        { $inc: { xp: xpAmount, total_xp: xpAmount } },
+        { new: true }
+      );
+      
+      console.log('[createQuiz] XP awarded. User XP now:', updatedUser.xp, 'Total XP:', updatedUser.total_xp);
+    } catch (xpError) {
+      console.error('[createQuiz] XP award error:', xpError.message);
+      // Don't fail the entire request if XP fails
+    }
+
     // Populate questions for response
     await quiz.populate('questions');
     await quiz.populate('createdBy', 'name username');
 
-    res.status(201).json({ quiz });
+    res.status(201).json({ 
+      quiz,
+      xpAwarded: xpAmount,
+      message: `Quiz created! You earned ${xpAmount} XP` 
+    });
   } catch (error) {
     console.error('Create quiz error:', error);
     res.status(500).json({ error: 'Failed to create quiz' });

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, BookOpen, MessageSquare, Zap, Users, Brain, Shield } from 'lucide-react';
+import { ArrowRight, BookOpen, MessageSquare, Zap, Users, Brain, Shield, CloudOff } from 'lucide-react';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { StudentOfTheWeek } from '../components/StudentOfTheWeek';
@@ -19,13 +19,13 @@ export const LandingPage: React.FC = () => {
     },
     {
       icon: MessageSquare,
-      title: 'Real-Time Chat',
-      description: 'Collaborate with peers through Web PubSub powered messaging',
+      title: 'Real-Time Chat and Social Learning',
+      description: 'Join groups and collaborate with peers through WebSocket powered messaging',
     },
     {
-      icon: Users,
-      title: 'Social Learning',
-      description: 'Join groups, earn badges, and climb the leaderboard',
+      icon: CloudOff,
+      title: ' Learn Anywhere. Even Offline.',
+      description: 'Download quizzes and flashcards and keep studying on the go — no internet, no limits.',
     },
     {
       icon: Zap,
@@ -59,7 +59,7 @@ export const LandingPage: React.FC = () => {
                 Learn Smarter with AI
               </h1>
               <p className="text-lg md:text-xl text-blue-100 max-w-xl">
-                ischkul combines AI-powered tutoring, real-time collaboration, and spaced repetition to help students achieve academic excellence.
+                iSchkul combines AI-powered tutoring, real-time collaboration, and spaced repetition to help students achieve academic excellence.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
                 <Link
@@ -97,7 +97,7 @@ export const LandingPage: React.FC = () => {
       </section>
 
       {/* Stats Section */}
-      <section className="py-12 bg-gray-50">
+      {/*<section className="py-12 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {stats.map((stat, index) => (
@@ -108,7 +108,7 @@ export const LandingPage: React.FC = () => {
             ))}
           </div>
         </div>
-      </section>
+      </section>*/}
 
       {/* Student of the Week Section */}
       <section className="py-16 bg-white">

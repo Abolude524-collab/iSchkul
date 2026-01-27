@@ -58,14 +58,19 @@ router.post('/register', async (req, res) => {
 // Login
 router.post('/login', async (req, res) => {
   try {
+    console.log('[Auth] Login request body:', req.body);
+    console.log('[Auth] Content-Type:', req.headers['content-type']);
+    
     const { email, password } = req.body;
     
     // Validate input
     if (!email || !password) {
+      console.log('[Auth] Missing fields - email:', !!email, 'password:', !!password);
       return res.status(400).json({ error: 'Email and password are required' });
     }
     
     if (typeof email !== 'string') {
+      console.log('[Auth] Invalid email type:', typeof email);
       return res.status(400).json({ error: 'Invalid email format' });
     }
 
@@ -74,12 +79,14 @@ router.post('/login', async (req, res) => {
       $or: [{ email: email }, { username: email }] 
     });
     if (!user) {
+      console.log('[Auth] User not found for email:', email);
       return res.status(400).json({ error: 'Invalid credentials' });
     }
 
     // Check password
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
+      console.log('[Auth] Password mismatch for user:', email);
       return res.status(400).json({ error: 'Invalid credentials' });
     }
 
@@ -91,6 +98,7 @@ router.post('/login', async (req, res) => {
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
     const transformedUser = transformUserAvatar(user);
+    console.log('[Auth] Login successful for:', email);
     res.json({
       token,
       user: {

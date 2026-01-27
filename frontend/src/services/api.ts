@@ -153,8 +153,8 @@ export const gamificationAPI = {
     apiClient.post('/gamification/enter'),
   getLeaderboard: () =>
     apiClient.get('/gamification/leaderboard'),
-  getXpHistory: () =>
-    apiClient.get('/gamification/history'),
+  getXpHistory: (limit: number = 50) =>
+    apiClient.get('/gamification/history', { params: { limit } }),
   getUserActivity: () =>
     apiClient.get('/gamification/activity'),
   getProfileStats: () =>

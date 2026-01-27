@@ -4,7 +4,7 @@ import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { useAuthStore } from '../services/store';
 import { gamificationAPI, getAPIEndpoint } from '../services/api';
-import { Loader, AlertCircle, CheckCircle, XCircle, Brain, Calculator, Plus, BookOpen, Trophy, Clock, Edit, Trash2, Play, Share2, History, TrendingUp, BarChart2, ChevronLeft } from 'lucide-react';
+import { Loader, AlertCircle, CheckCircle, XCircle, Brain, Calculator, Plus, BookOpen, Trophy, Clock, Edit, Trash2, Play, Share2, History, TrendingUp, BarChart2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell, Legend } from 'recharts';
 import { QuizSettingsForm } from '../components/QuizSettingsForm';
 import { QuestionListEditor } from '../components/QuestionListEditor';
@@ -451,13 +451,11 @@ export const QuizPage: React.FC = () => {
         setQuizResult(submitData.result);
         setAttemptNumber(submitData.attemptNumber || 1);
 
-        // Award XP for quiz completion
+        // Refresh user stats to reflect backend XP award
         try {
-          await gamificationAPI.awardXP('QUIZ_COMPLETE');
-          // Refresh user stats in auth store
           await refreshUserStats();
         } catch (xpError) {
-          console.error('Failed to award XP:', xpError);
+          console.error('Failed to refresh user stats:', xpError);
         }
       } else {
         const err = await submitResponse.json();
@@ -527,13 +525,11 @@ export const QuizPage: React.FC = () => {
         const submitData = await submitResponse.json();
         setAttemptNumber(submitData.attemptNumber || 1);
 
-        // Award XP for quiz completion
+        // Refresh user stats to reflect backend XP award
         try {
-          await gamificationAPI.awardXP('QUIZ_COMPLETE');
-          // Refresh user stats in auth store
           await refreshUserStats();
         } catch (xpError) {
-          console.error('Failed to award XP:', xpError);
+          console.error('Failed to refresh user stats:', xpError);
         }
       }
     } catch (error) {
@@ -728,6 +724,13 @@ export const QuizPage: React.FC = () => {
         setQuizzes([data.quiz, ...quizzes]);
         setView('dashboard');
         resetCreateForm();
+        
+        // Show XP reward notification
+        if (data.xpAwarded) {
+          alert(`✅ Quiz created successfully! You earned ${data.xpAwarded} XP`);
+          // Refresh user stats to update XP across the app
+          refreshUserStats().catch(e => console.warn('Stats refresh failed', e));
+        }
         setPastedText('');
         setGenerateMode('topic');
       } else {
@@ -841,8 +844,13 @@ export const QuizPage: React.FC = () => {
             setSubmitted(true);
             setView('results');
             
-            // Background XP award
-            gamificationAPI.awardXP('QUIZ_COMPLETE').catch(e => console.warn('XP award failed', e));
+            // Show XP reward notification
+            const xpFromScore = data.result?.percentage >= 80 ? 20 : data.result?.percentage >= 60 ? 15 : 10;
+            if (xpFromScore) {
+              alert(`🎉 Quiz completed! You earned ${xpFromScore} XP`);
+            }
+            
+            // Refresh user stats to reflect the XP awarded by backend
             refreshUserStats().catch(e => console.warn('Stats refresh failed', e));
             return;
           }
@@ -2037,9 +2045,10 @@ export const QuizPage: React.FC = () => {
                 <button
                   onClick={() => setCurrentQuestion(Math.max(0, currentQuestion - 1))}
                   disabled={currentQuestion === 0}
-                  className="flex-1 px-4 py-3 border border-gray-300 text-gray-900 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                  className="flex-1 px-4 py-3 border border-gray-300 text-gray-900 rounded-lg hover:bg-gray-50 disabled:opacity-50 flex items-center justify-center gap-2"
                 >
-                  Previous
+                  <ChevronLeft size={20} />
+                  <span className="hidden sm:inline">Previous</span>
                 </button>
 
                 {currentQuestion === ((selectedQuiz?.questions?.length || 0) - 1) ? (
@@ -2052,9 +2061,10 @@ export const QuizPage: React.FC = () => {
                 ) : (
                   <button
                     onClick={() => setCurrentQuestion(currentQuestion + 1)}
-                    className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all"
+                    className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all flex items-center justify-center gap-2"
                   >
-                    Next
+                    <span className="hidden sm:inline">Next</span>
+                    <ChevronRight size={20} />
                   </button>
                 )}
               </div>

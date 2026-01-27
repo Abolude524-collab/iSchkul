@@ -20,6 +20,13 @@ const formatRelativeTime = (dateString: string) => {
   return date.toLocaleDateString();
 };
 
+// Day key helper
+const startOfDayKey = (date: Date) => {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString().slice(0, 10);
+};
+
 const getActivityDetails = (activity: any) => {
   const type = activity.activity_type.toUpperCase();
   const metadata = activity.metadata || {};
@@ -107,9 +114,46 @@ export const DashboardPage: React.FC = () => {
     badges: 0,
     todaysXp: 0,
     isStreakActive: false,
+    dailyLoginXp: 0,
+    streakXpToday: 0,
+    streakDays: [] as { date: string; label: string; streak: boolean; loginXp: number; streakXp: number }[],
   });
   const [activities, setActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const buildStreakSummary = (history: any[]) => {
+    const dayMap: Record<string, { streak: boolean; loginXp: number; streakXp: number }> = {};
+    history.forEach((log) => {
+      if (!log?.timestamp) return;
+      const key = startOfDayKey(new Date(log.timestamp));
+      if (!dayMap[key]) dayMap[key] = { streak: false, loginXp: 0, streakXp: 0 };
+      if (log.activity_type === 'daily_login') {
+        dayMap[key].loginXp += log.xp_earned || 0;
+      }
+      if (log.activity_type === 'DAILY_STREAK') {
+        dayMap[key].streak = true;
+        dayMap[key].streakXp += log.xp_earned || 0;
+      }
+    });
+
+    const today = new Date();
+    const days: { date: string; label: string; streak: boolean; loginXp: number; streakXp: number }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      const key = startOfDayKey(d);
+      const label = d.toLocaleDateString(undefined, { weekday: 'short' });
+      const info = dayMap[key] || { streak: false, loginXp: 0, streakXp: 0 };
+      days.push({ date: key, label, streak: info.streak, loginXp: info.loginXp, streakXp: info.streakXp });
+    }
+
+    const todayKey = startOfDayKey(today);
+    return {
+      dailyLoginXp: dayMap[todayKey]?.loginXp || 0,
+      streakXpToday: dayMap[todayKey]?.streakXp || 0,
+      streakDays: days,
+    };
+  };
 
   const fetchUserStats = async () => {
     try {
@@ -119,12 +163,14 @@ export const DashboardPage: React.FC = () => {
       const [activityResponse, statsResponse, historyResponse] = await Promise.all([
         gamificationAPI.getUserActivity(),
         gamificationAPI.getProfileStats().catch(() => ({ data: { xp: 0, currentStreak: 0, isStreakActive: false } })),
-        gamificationAPI.getXpHistory().catch(() => ({ data: { history: [] } }))
+        gamificationAPI.getXpHistory(60).catch(() => ({ data: { history: [] } }))
       ]);
 
       const activityData = activityResponse.data;
       const statsData = statsResponse.data;
       const historyData = historyResponse.data;
+
+      const streakSummary = buildStreakSummary(historyData.history || []);
 
       setStats({
         totalXp: statsData.xp || activityData.totalXp || 0,
@@ -134,6 +180,9 @@ export const DashboardPage: React.FC = () => {
         badges: statsData.badges?.length || 0,
         todaysXp: activityData.todaysXp || 0,
         isStreakActive: statsData.isStreakActive || false,
+        dailyLoginXp: streakSummary.dailyLoginXp,
+        streakXpToday: streakSummary.streakXpToday,
+        streakDays: streakSummary.streakDays,
       });
 
       setActivities(historyData.history || []);
@@ -142,11 +191,15 @@ export const DashboardPage: React.FC = () => {
       // Fallback to user object data
       setStats({
         totalXp: user?.total_xp || 0,
+        weeklyXp: 0,
         streak: user?.current_streak || 0,
         level: user?.level || 1,
         badges: user?.badges?.length || 0,
         todaysXp: 0,
         isStreakActive: false,
+        dailyLoginXp: 0,
+        streakXpToday: 0,
+        streakDays: [],
       });
     }
   };
@@ -198,7 +251,7 @@ export const DashboardPage: React.FC = () => {
       icon: BookOpen,
       title: 'Flashcard Sets',
       description: 'Create and manage organized flashcard collections',
-      route: '/flashcard-sets',
+      route: '/flashcards',
       color: 'from-purple-500 to-pink-500',
     },
     {
@@ -207,13 +260,6 @@ export const DashboardPage: React.FC = () => {
       description: 'Real-time collaboration with peers',
       route: '/chat',
       color: 'from-green-500 to-emerald-500',
-    },
-    {
-      icon: Users,
-      title: 'Social',
-      description: 'Follow peers and compete on leaderboards',
-      route: '/social',
-      color: 'from-orange-500 to-red-500',
     },
     {
       icon: Zap,
@@ -255,10 +301,10 @@ export const DashboardPage: React.FC = () => {
           </h1>
           <p className="text-gray-600 text-lg">
             {new Date().getHours() < 12
-              ? '🌅 Good morning! Time to learn something new.'
+              ? 'Good morning! Time to learn something new.'
               : new Date().getHours() < 18
-                ? '☀️ Good afternoon! Keep up the momentum.'
-                : '🌙 Good evening! A great time to study.'}
+                ? 'Good afternoon! Keep up the momentum.'
+                : 'Good evening! A great time to study.'}
           </p>
         </div>
 
@@ -282,16 +328,41 @@ export const DashboardPage: React.FC = () => {
               <div>
                 <p className="text-gray-600 text-sm font-medium">Streak</p>
                 <p className="text-3xl font-bold text-orange-600 mt-2">
-                  {stats.streak} {stats.isStreakActive ? '🔥' : '💔'}
+                  {stats.streak} {stats.isStreakActive ? 'Crushing it!' : 'Earn more XP daily!'}
                 </p>
               </div>
               <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
                 <Award className="text-orange-600" size={24} />
               </div>
             </div>
-            <p className="text-xs text-gray-500 mt-4">
+            <p className="text-xs text-gray-500 mt-3">
               {stats.isStreakActive ? 'Active streak!' : 'Login daily to maintain streak'}
             </p>
+            <div className="flex flex-wrap items-center gap-2 mt-3 text-[11px] text-gray-600">
+              <span className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 px-2 py-1 rounded-full">
+                <Award size={12} /> Daily login +{stats.dailyLoginXp} XP
+              </span>
+              <span className="inline-flex items-center gap-1 bg-orange-50 text-orange-700 px-2 py-1 rounded-full">
+                <Zap size={12} /> Streak XP +{stats.streakXpToday} XP
+              </span>
+            </div>
+            {stats.streakDays.length > 0 && (
+              <div className="mt-4">
+                <div className="text-xs text-gray-500 mb-2">Last 7 days</div>
+                <div className="grid grid-cols-7 gap-2 text-center">
+                  {stats.streakDays.map((day) => (
+                    <div key={day.date} className="space-y-1">
+                      <div className={`mx-auto w-8 h-8 rounded-full border flex items-center justify-center text-[11px] font-semibold ${day.streak ? 'bg-orange-500 text-white border-orange-500' : 'border-gray-200 text-gray-500'}`}>
+                        {day.label.slice(0, 2)}
+                      </div>
+                      <div className="text-[10px] text-gray-500 leading-none">
+                        {day.loginXp ? `+${day.loginXp}` : ''}{day.streakXp ? `/${day.streakXp}` : ''}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
@@ -354,7 +425,7 @@ export const DashboardPage: React.FC = () => {
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold text-gray-900">Recent Activity</h2>
             <button 
-              onClick={() => navigate('/history')}
+              onClick={() => navigate('/xp-history')}
               className="text-blue-600 text-sm font-medium hover:underline"
             >
               View Full History
