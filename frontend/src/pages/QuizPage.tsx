@@ -2041,7 +2041,7 @@ export const QuizPage: React.FC = () => {
                 />
               )}
 
-              <div className="flex flex-col md:flex-row gap-3 md:gap-4 mt-8">
+              <div className="flex flex-row gap-3 md:gap-4 mt-8">
                 <button
                   onClick={() => setCurrentQuestion(Math.max(0, currentQuestion - 1))}
                   disabled={currentQuestion === 0}
