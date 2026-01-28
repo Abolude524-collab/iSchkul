@@ -8,6 +8,8 @@ require('express-async-errors'); // Must be required before any routes
 const helmet = require('helmet');
 const compression = require('compression');
 const morgan = require('morgan');
+const rateLimit = require('express-rate-limit');
+const mongoSanitize = require('express-mongo-sanitize');
 
 const app = express();
 const server = http.createServer(app);
@@ -16,30 +18,75 @@ const io = socketIo(server, {
     origin: [process.env.FRONTEND_URL, 'https://ischkuldemo12.netlify.app', 'http://localhost:5173', 'http://localhost:3000'],
     methods: ["GET", "POST"],
     credentials: true
-  }
+  },
+  // Socket.io performance optimizations
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  maxHttpBufferSize: 1e6, // 1MB max message size
+  transports: ['websocket', 'polling'],
+  allowUpgrades: true
 });
 
 // Middleware
 app.use(helmet()); // Basic security headers
 app.use(compression()); // Compress responses
-app.use(morgan('dev')); // Logging
+
+// Environment-aware logging
+if (process.env.NODE_ENV === 'production') {
+  app.use(morgan('combined')); // Detailed production logs
+} else {
+  app.use(morgan('dev')); // Colored dev logs
+}
+
 app.use(cors({
   origin: [process.env.FRONTEND_URL, 'https://ischkuldemo12.netlify.app', 'http://localhost:5173', 'http://localhost:3000'],
   credentials: true
 }));
+
+// Rate limiting - prevent DoS attacks
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: 'Too many requests from this IP, please try again later.'
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit login attempts
+  message: 'Too many login attempts, please try again later.'
+});
+
+app.use('/api/', limiter); // Apply to all API routes
+app.use('/api/auth/login', authLimiter); // Stricter limit for login
+app.use('/api/auth/register', authLimiter); // Stricter limit for register
+
+// Sanitize data to prevent NoSQL injection
+app.use(mongoSanitize());
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Database connection
+// Database connection with optimized pooling
 async function connectDB() {
   try {
     await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/ischkul', {
       // Removed deprecated options (useNewUrlParser, useUnifiedTopology)
       // These are defaults in Mongoose 6+
+      maxPoolSize: 10, // Maximum number of connections in pool
+      minPoolSize: 2, // Minimum number of connections
+      serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
+      socketTimeoutMS: 45000, // Close sockets after 45s of inactivity
     });
-    console.log('Connected to MongoDB');
+    console.log('✅ Connected to MongoDB with connection pooling');
+    
+    // Enable query logging in development
+    if (process.env.NODE_ENV !== 'production') {
+      mongoose.set('debug', true);
+    }
   } catch (err) {
-    console.error('MongoDB connection error:', err);
+    console.error('❌ MongoDB connection error:', err);
+    // Retry connection after 5 seconds
+    setTimeout(connectDB, 5000);
   }
 }
 
@@ -51,12 +98,20 @@ async function initializeWeeklyLeaderboard() {
     const Leaderboard = require('./models/Leaderboard');
 
     const now = new Date();
-    const startOfWeek = new Date(now);
-    startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday
+    const today = new Date(now);
+    today.setHours(0, 0, 0, 0);
+    
+    // Calculate days to Monday (0 = Sunday, so Monday = 1)
+    const diffToMonday = (today.getDay() + 6) % 7;
+    const thisWeekMonday = new Date(today);
+    thisWeekMonday.setDate(today.getDate() - diffToMonday);
+    
+    // Current week: Monday 00:00 to Sunday 23:59:59
+    const startOfWeek = new Date(thisWeekMonday);
     startOfWeek.setHours(0, 0, 0, 0);
 
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6); // Saturday
+    const endOfWeek = new Date(thisWeekMonday);
+    endOfWeek.setDate(thisWeekMonday.getDate() + 6); // Sunday
     endOfWeek.setHours(23, 59, 59, 999);
 
     // Check if there's already an active weekly leaderboard
@@ -84,7 +139,7 @@ async function initializeWeeklyLeaderboard() {
       });
 
       await weeklyLeaderboard.save();
-      console.log('✅ Weekly leaderboard created for week of', startOfWeek.toLocaleDateString());
+      console.log('✅ Weekly leaderboard created for week of', startOfWeek.toLocaleDateString(), '-', endOfWeek.toLocaleDateString());
     } else {
       console.log('✅ Active weekly leaderboard already exists');
     }
@@ -179,6 +234,7 @@ app.use('/api/flashcards', require('./routes/flashcards'));
 app.use('/api/xp-history', require('./routes/xpHistory'));
 app.use('/api/documents', require('./routes/documents'));
 app.use('/api/co-reader', require('./routes/coReader'));
+app.use('/api/push-tokens', require('./routes/pushTokens'));
 
 // Set io for routes that need it
 require('./routes/contactRequests').setIo(io);

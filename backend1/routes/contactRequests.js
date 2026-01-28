@@ -2,6 +2,7 @@ const express = require('express');
 const auth = require('../middleware/auth');
 const ContactRequest = require('../models/ContactRequest');
 const User = require('../models/User');
+const { sendPushToUser } = require('../utils/pushNotifications');
 
 const router = express.Router();
 
@@ -51,6 +52,13 @@ router.post('/send', auth, async (req, res) => {
     if (io) {
       io.to(recipientId.toString()).emit('contact-request', request);
     }
+
+    // Send push notification to recipient (if registered)
+    await sendPushToUser(recipientId, {
+      title: 'New Friend Request',
+      body: `${request.sender?.name || request.sender?.username || 'Someone'} sent you a friend request`,
+      data: { type: 'contact-request', requestId: request._id }
+    });
 
     res.json({ request });
   } catch (error) {

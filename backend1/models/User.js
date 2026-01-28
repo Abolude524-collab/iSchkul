@@ -67,17 +67,20 @@ const userSchema = new mongoose.Schema({
   },
   xp: {
     type: Number,
-    default: 0
+    default: 0,
+    index: true // Index for leaderboard queries
   },
   level: {
     type: Number,
-    default: 1
+    default: 1,
+    index: true // Index for level-based queries
   },
   // Gamification fields (matching student-web-app)
   total_xp: {
     type: Number,
     default: 0,
-    min: 0
+    min: 0,
+    index: true // Index for gamification queries
   },
   last_active_date: {
     type: Date,
@@ -128,5 +131,10 @@ userSchema.pre('save', async function (next) {
 userSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
+
+// Compound indexes for common queries
+userSchema.index({ xp: -1, role: 1 }); // Leaderboard queries
+userSchema.index({ email: 1, username: 1 }); // Auth queries
+userSchema.index({ isAdmin: 1, role: 1 }); // Admin filtering
 
 module.exports = mongoose.model('User', userSchema);

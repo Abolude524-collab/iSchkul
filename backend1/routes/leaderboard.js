@@ -61,10 +61,11 @@ router.post('/create', auth, async (req, res) => {
 // List leaderboards
 router.get('/list', auth, async (req, res) => {
   try {
-    // Fetch from database
+    // Fetch from database with lean() for better performance
     const leaderboards = await Leaderboard.find()
       .sort({ createdAt: -1 })
-      .populate('createdBy', 'name email');
+      .populate('createdBy', 'name email')
+      .lean(); // Convert to plain JS objects for faster response
 
     res.json({
       leaderboards: leaderboards.map(lb => ({
@@ -166,23 +167,88 @@ router.get('/active', auth, async (req, res) => {
       });
     }
 
-    // Sort users by XP and add rankings
-    const rankings = users
-      .filter(user => user.xp > 0) // Only include users with XP
-      .sort((a, b) => b.xp - a.xp)
-      .slice(0, 50) // Limit to top 50
-      .map((user, index) => ({
-        id: user._id.toString(),
-        _id: user._id.toString(),
-        rank: index + 1,
-        name: user.name || user.username || 'Anonymous',
-        username: user.username,
-        institution: user.institution || '',
-        total_xp: user.xp || 0,
-        xp: user.xp || 0,
-        level: user.level || 0,
-        avatar: getAvatarUrl(user.avatar)
-      }));
+    // For Weekly Leaderboard: Calculate XP for THIS WEEK only
+    // For other leaderboards: Use total XP
+    const isWeeklyLeaderboard = activeLeaderboard.title === 'Weekly Leaderboard';
+    
+    let rankings;
+    if (isWeeklyLeaderboard) {
+      // Get XP earned THIS WEEK (current week in progress)
+      const XpLog = require('../models/XpLog');
+      const now = new Date();
+      const today = new Date(now);
+      today.setHours(0, 0, 0, 0);
+      
+      const diffToMonday = (today.getDay() + 6) % 7;
+      const thisWeekMonday = new Date(today);
+      thisWeekMonday.setDate(today.getDate() - diffToMonday);
+      thisWeekMonday.setHours(0, 0, 0, 0);
+      
+      const thisWeekSunday = new Date(thisWeekMonday);
+      thisWeekSunday.setDate(thisWeekMonday.getDate() + 6);
+      thisWeekSunday.setHours(23, 59, 59, 999);
+      
+      // Get weekly XP for all users
+      const weeklyXpData = await XpLog.aggregate([
+        {
+          $match: {
+            timestamp: { $gte: thisWeekMonday, $lte: thisWeekSunday }
+          }
+        },
+        {
+          $group: {
+            _id: '$user_id',
+            weeklyXp: { $sum: '$xp_earned' }
+          }
+        }
+      ]);
+      
+      // Create map of userId -> weeklyXp
+      const weeklyXpMap = new Map();
+      weeklyXpData.forEach(item => {
+        weeklyXpMap.set(item._id.toString(), item.weeklyXp);
+      });
+      
+      // Sort users by weekly XP
+      rankings = users
+        .map(user => ({
+          id: user._id.toString(),
+          _id: user._id.toString(),
+          name: user.name || user.username || 'Anonymous',
+          username: user.username,
+          institution: user.institution || '',
+          weeklyXp: weeklyXpMap.get(user._id.toString()) || 0,
+          total_xp: user.xp || 0,
+          xp: weeklyXpMap.get(user._id.toString()) || 0, // Weekly XP for display
+          level: user.level || 0,
+          avatar: getAvatarUrl(user.avatar)
+        }))
+        .filter(user => user.weeklyXp > 0) // Only users with XP this week
+        .sort((a, b) => b.weeklyXp - a.weeklyXp)
+        .slice(0, 50)
+        .map((user, index) => ({
+          ...user,
+          rank: index + 1
+        }));
+    } else {
+      // Other leaderboards: use total XP
+      rankings = users
+        .filter(user => user.xp > 0)
+        .sort((a, b) => b.xp - a.xp)
+        .slice(0, 50)
+        .map((user, index) => ({
+          id: user._id.toString(),
+          _id: user._id.toString(),
+          rank: index + 1,
+          name: user.name || user.username || 'Anonymous',
+          username: user.username,
+          institution: user.institution || '',
+          total_xp: user.xp || 0,
+          xp: user.xp || 0,
+          level: user.level || 0,
+          avatar: getAvatarUrl(user.avatar)
+        }));
+    }
 
     res.json({
       leaderboard: {

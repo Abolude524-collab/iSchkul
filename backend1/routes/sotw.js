@@ -21,17 +21,46 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
+// Get LAST COMPLETED week (for SOTW winner display)
 function getLastFullWeekRange(now = new Date()) {
   const today = new Date(now);
   today.setHours(0, 0, 0, 0);
+  
+  // Calculate this week's Monday
   const diffToMonday = (today.getDay() + 6) % 7;
   const thisWeekMonday = new Date(today);
   thisWeekMonday.setDate(today.getDate() - diffToMonday);
-  const lastWeekEnd = new Date(thisWeekMonday);
-  lastWeekEnd.setMilliseconds(-1);
-  const lastWeekStart = new Date(thisWeekMonday);
-  lastWeekStart.setDate(thisWeekMonday.getDate() - 7);
-  return { start: lastWeekStart, end: lastWeekEnd };
+  
+  // Get LAST week (completed) by subtracting 7 days
+  const lastWeekMonday = new Date(thisWeekMonday);
+  lastWeekMonday.setDate(thisWeekMonday.getDate() - 7);
+  lastWeekMonday.setHours(0, 0, 0, 0);
+  
+  const lastWeekSunday = new Date(lastWeekMonday);
+  lastWeekSunday.setDate(lastWeekMonday.getDate() + 6); // Sunday
+  lastWeekSunday.setHours(23, 59, 59, 999);
+  
+  return { start: lastWeekMonday, end: lastWeekSunday };
+}
+
+// Get CURRENT week (for weekly leaderboard in progress)
+function getCurrentWeekRange(now = new Date()) {
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  
+  const diffToMonday = (today.getDay() + 6) % 7;
+  const thisWeekMonday = new Date(today);
+  thisWeekMonday.setDate(today.getDate() - diffToMonday);
+  
+  // Current week: Monday 00:00 to Sunday 23:59:59
+  const weekStart = new Date(thisWeekMonday);
+  weekStart.setHours(0, 0, 0, 0);
+  
+  const weekEnd = new Date(thisWeekMonday);
+  weekEnd.setDate(thisWeekMonday.getDate() + 6); // Sunday
+  weekEnd.setHours(23, 59, 59, 999);
+  
+  return { start: weekStart, end: weekEnd };
 }
 
 function uniqueActiveDaysWithinRange(logs, start, end) {
@@ -60,38 +89,47 @@ router.get('/current', async (req, res) => {
     const now = new Date();
     const { start, end } = getLastFullWeekRange(now);
 
-    // Check if we already have a winner for this week
+    // Clean up old SOTW records (older than 2 weeks) to prevent stale data
+    await weeklyWinnersCollection.deleteMany({
+      end_date: { $lt: new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000) }
+    });
+
+    // Check if we already have a winner for THIS EXACT week
     const existingWinner = await weeklyWinnersCollection.findOne({
       start_date: start,
       end_date: end
     });
 
-    if (existingWinner) {
-      const winner = await usersCollection.findOne({ _id: existingWinner.user_id });
-      if (winner) {
-        res.json({
-          success: true,
-          winner: {
-            user_id: winner._id.toString(),
-            name: winner.name || `${winner.firstName || ''} ${winner.lastName || ''}`.trim() || winner.username || 'Student',
-            user: {
-              name: winner.name || `${winner.firstName || ''} ${winner.lastName || ''}`.trim() || winner.username,
-              institution: winner.institution,
-              profilePicture: winner.profilePicture,
-              username: winner.username
-            },
-            institution: winner.institution || '',
-            weekly_score: existingWinner.weekly_score,
-            start_date: start,
-            end_date: end,
-            winner_quote: existingWinner.winner_quote || '',
-          }
-        });
-        return;
+    if (existingWinner && existingWinner.updated_at) {
+      // If we have a recent record (updated within last 2 hours), use it
+      const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+      if (new Date(existingWinner.updated_at) > twoHoursAgo) {
+        const winner = await usersCollection.findOne({ _id: existingWinner.user_id });
+        if (winner) {
+          res.json({
+            success: true,
+            winner: {
+              user_id: winner._id.toString(),
+              name: winner.name || `${winner.firstName || ''} ${winner.lastName || ''}`.trim() || winner.username || 'Student',
+              user: {
+                name: winner.name || `${winner.firstName || ''} ${winner.lastName || ''}`.trim() || winner.username,
+                institution: winner.institution,
+                profilePicture: winner.profilePicture,
+                username: winner.username
+              },
+              institution: winner.institution || '',
+              weekly_score: existingWinner.weekly_score,
+              start_date: start,
+              end_date: end,
+              winner_quote: existingWinner.winner_quote || '',
+            }
+          });
+          return;
+        }
       }
     }
 
-    // Calculate new winner
+    // Always recalculate for this week to ensure fresh data
     const pipeline = [
       { $match: { timestamp: { $gte: start, $lte: end } } },
       { $group: { _id: '$user_id', weekly_score: { $sum: '$xp_earned' } } },
@@ -131,18 +169,21 @@ router.get('/current', async (req, res) => {
       { new: true }
     );
 
-    // Create weekly winner record
+    // Update or create weekly winner record with timestamp for cache control
     const winnerRecord = await weeklyWinnersCollection.findOneAndUpdate(
       { start_date: start, end_date: end },
       {
-        user_id: winner._id,
-        start_date: start,
-        end_date: end,
-        weekly_score: top.weekly_score,
-        winner_quote: '',
-        created_at: new Date()
+        $set: {
+          user_id: winner._id,
+          start_date: start,
+          end_date: end,
+          weekly_score: top.weekly_score,
+          winner_quote: '',
+          updated_at: new Date(), // Add timestamp for cache control
+          created_at: new Date()
+        }
       },
-      { upsert: true, new: true }
+      { upsert: true, new: true, returnDocument: 'after' }
     );
 
     const winnerData = {
@@ -249,4 +290,7 @@ router.post('/quote', authenticateToken, async (req, res) => {
   }
 });
 
+// Export helper functions for use in other modules
 module.exports = router;
+module.exports.getLastFullWeekRange = getLastFullWeekRange;
+module.exports.getCurrentWeekRange = getCurrentWeekRange;

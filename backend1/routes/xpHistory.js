@@ -28,8 +28,13 @@ router.get('/', authenticateToken, async (req, res) => {
     // Get total count
     const totalCount = await XpLog.countDocuments(query);
 
-    // Get user's current stats
+    // Get user's current stats - calculate from logs for accuracy
+    const xpTotal = await XpLog.aggregate([
+      { $match: { user_id: new mongoose.Types.ObjectId(userId) } },
+      { $group: { _id: null, total: { $sum: '$xp_earned' } } }
+    ]);
     const user = await User.findById(userId).select('xp level');
+    const actualXp = xpTotal[0]?.total || user?.xp || 0;
 
     res.json({
       success: true,
@@ -48,7 +53,7 @@ router.get('/', authenticateToken, async (req, res) => {
           hasMore: totalCount > (parseInt(skip) + parseInt(limit))
         },
         userStats: {
-          totalXp: user?.xp || 0,
+          totalXp: actualXp,
           level: user?.level || 1
         }
       }

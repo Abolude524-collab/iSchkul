@@ -3,6 +3,7 @@ const auth = require('../middleware/auth');
 const PersonalChat = require('../models/PersonalChat');
 const PersonalMessage = require('../models/PersonalMessage');
 const User = require('../models/User');
+const { sendPushToUser } = require('../utils/pushNotifications');
 
 const router = express.Router();
 
@@ -155,10 +156,16 @@ router.get('/messages/:chatId', auth, async (req, res) => {
 
     const formattedMessages = messages.reverse().map(message => ({
       _id: message._id,
-      sender: message.sender._id, // Return as string ID
+      senderId: {
+        _id: message.sender._id,
+        name: message.sender.name,
+        username: message.sender.username,
+        avatar: message.sender.avatar
+      },
       content: message.content,
       messageType: message.messageType,
       timestamp: message.createdAt, // Use timestamp field as expected by frontend
+      createdAt: message.createdAt,
       readBy: message.readBy.map(rb => rb.user.toString())
     }));
 
@@ -225,6 +232,16 @@ router.post('/send/:chatId', auth, async (req, res) => {
           timestamp: newMessage.createdAt,
           readBy: newMessage.readBy.map(rb => rb.user.toString())
         }
+      });
+    }
+
+    // Push notification to recipient (if registered)
+    if (otherParticipant) {
+      const senderName = newMessage.sender?.name || newMessage.sender?.username || 'New message';
+      await sendPushToUser(otherParticipant, {
+        title: senderName,
+        body: newMessage.content || 'New message received',
+        data: { type: 'personal-message', chatId }
       });
     }
 

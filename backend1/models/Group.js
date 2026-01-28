@@ -304,4 +304,10 @@ groupSchema.statics.findUserGroups = function(userId, options = {}) {
     .skip(skip);
 };
 
+// Add indexes for common queries
+groupSchema.index({ 'members.user': 1 }); // Find user's groups
+groupSchema.index({ category: 1, 'stats.lastActivity': -1 }); // Category + activity
+groupSchema.index({ 'inviteLink.code': 1 }); // Invite link lookups
+groupSchema.index({ createdBy: 1, createdAt: -1 }); // Creator's groups
+
 module.exports = mongoose.model('Group', groupSchema);

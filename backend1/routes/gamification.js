@@ -2,6 +2,7 @@ const express = require('express');
 const auth = require('../middleware/auth');
 const User = require('../models/User');
 const XpLog = require('../models/XpLog');
+const mongoose = require('mongoose');
 
 const router = express.Router();
 
@@ -104,7 +105,8 @@ async function performAward(user_id, activity_type, requestXp = null, metadata =
   // 1. XP Award Logic
   if (baseXp > 0) {
     if (activity_type === 'daily_login') {
-      // Special handling for daily login - only award once per day
+      // --- PRODUCTION-GRADE: Only award once per user per day, even under race conditions ---
+      // Use findOneAndUpdate with $setOnInsert and unique index for (user_id, activity_type, day)
       const dailyLoginResult = await XpLog.findOneAndUpdate(
         {
           user_id: user._id,
@@ -122,8 +124,7 @@ async function performAward(user_id, activity_type, requestXp = null, metadata =
         },
         { upsert: true, new: true, includeResultMetadata: true }
       );
-
-      // Mongoose 8 returns metadata in lastErrorObject or result.lastErrorObject
+      // Defensive: Only award if this is the first insert today
       const wasInserted = dailyLoginResult.lastErrorObject && !dailyLoginResult.lastErrorObject.updatedExisting;
       if (wasInserted) {
         totalAwarded += baseXp;
@@ -151,6 +152,7 @@ async function performAward(user_id, activity_type, requestXp = null, metadata =
   // 2. Streak Logic
   let streakUpdate = {};
   try {
+    // Only award DAILY_STREAK once per user per day
     const streakResult = await XpLog.findOneAndUpdate(
       {
         user_id: user._id,
@@ -169,10 +171,9 @@ async function performAward(user_id, activity_type, requestXp = null, metadata =
     );
 
     const isNewStreakDay = streakResult.lastErrorObject && !streakResult.lastErrorObject.updatedExisting;
-    
     if (isNewStreakDay) {
       totalAwarded += 5; // Base streak XP
-      
+
       // Calculate new streak count
       let nextStreak = 1;
       if (user.last_active_date) {
@@ -182,16 +183,22 @@ async function performAward(user_id, activity_type, requestXp = null, metadata =
           nextStreak = user.current_streak || 1;
         }
       }
-      
       streakUpdate = { $set: { current_streak: nextStreak } };
-      
-      // Bonus logic
-      if (nextStreak === 3) {
-        logsToInsert.push({ user_id: user._id, xp_earned: 10, activity_type: 'STREAK_BONUS', timestamp: now });
-        totalAwarded += 10;
-      } else if (nextStreak === 7) {
-        logsToInsert.push({ user_id: user._id, xp_earned: 50, activity_type: 'STREAK_BONUS', timestamp: now });
-        totalAwarded += 50;
+
+      // --- PRODUCTION-GRADE: Only award each STREAK_BONUS once per user per day ---
+      if (nextStreak === 3 || nextStreak === 7) {
+        const bonusAmount = nextStreak === 3 ? 10 : 50;
+        // Check if bonus already awarded today
+        const bonusExists = await XpLog.findOne({
+          user_id: user._id,
+          activity_type: 'STREAK_BONUS',
+          timestamp: { $gte: todayStart, $lt: todayEnd },
+          xp_earned: bonusAmount
+        });
+        if (!bonusExists) {
+          logsToInsert.push({ user_id: user._id, xp_earned: bonusAmount, activity_type: 'STREAK_BONUS', timestamp: now });
+          totalAwarded += bonusAmount;
+        }
       }
     }
   } catch (e) {
@@ -247,7 +254,12 @@ async function performAward(user_id, activity_type, requestXp = null, metadata =
 // Get leaderboard
 router.get('/leaderboard', auth, async (req, res) => {
   try {
-    const users = await User.find({ is_leaderboard_visible: true })
+    // Exclude admins and superadmins from leaderboard
+    const users = await User.find({ 
+      is_leaderboard_visible: true,
+      isAdmin: { $ne: true },
+      role: { $nin: ['admin', 'superadmin'] }
+    })
       .select('_id name username institution total_xp level avatar current_streak badges')
       .sort({ total_xp: -1 })
       .limit(50);
@@ -273,25 +285,52 @@ router.get('/leaderboard', auth, async (req, res) => {
   }
 });
 
-// Get user XP history (recent activities)
+// Get user XP history (recent activities) - FIXED for XP sync
 router.get('/history', auth, async (req, res) => {
   try {
     const userId = req.user._id;
     const limit = parseInt(req.query.limit) || 20;
 
-    const logs = await XpLog.find({ user_id: userId })
+    // Fetch XP logs - filter out entries without activity_type
+    const logs = await XpLog.find({ user_id: userId, activity_type: { $exists: true, $ne: null } })
       .sort({ timestamp: -1 })
       .limit(limit)
-      .select('xp_earned activity_type timestamp metadata');
+      .select('xp_earned activity_type timestamp metadata')
+      .lean();
 
+    // Get single source of truth - recalculate from logs if mismatch detected
     const user = await User.findById(userId).select('xp total_xp level current_streak');
-    const unifiedXp = Math.max(user.xp || 0, user.total_xp || 0);
+    
+    // Calculate total from logs to verify
+    const totalFromLogs = await XpLog.aggregate([
+      { $match: { user_id: new mongoose.Types.ObjectId(userId) } },
+      { $group: { _id: null, total: { $sum: '$xp_earned' } } }
+    ]);
+    
+    const calculatedXp = totalFromLogs[0]?.total || 0;
+    const dbXp = user.total_xp || user.xp || 0;
+    
+    // If mismatch > 30, flag it for repair
+    if (Math.abs(calculatedXp - dbXp) > 30) {
+      console.warn(`[XP SYNC ALERT] User ${userId}: DB=${dbXp}, Calculated=${calculatedXp}`);
+      // Use calculated value as single source of truth
+      await User.findByIdAndUpdate(userId, { 
+        $set: { xp: calculatedXp, total_xp: calculatedXp } 
+      });
+    }
 
     res.json({
-      currentXp: unifiedXp,
+      currentXp: calculatedXp || dbXp,
       level: user.level,
       currentStreak: user.current_streak,
-      history: logs
+      history: logs.map(log => ({
+        id: log._id,
+        xpEarned: log.xp_earned,
+        activityType: log.activity_type || 'UNKNOWN',
+        activity_type: log.activity_type || 'UNKNOWN',
+        metadata: log.metadata || {},
+        timestamp: log.timestamp
+      }))
     });
   } catch (error) {
     console.error('XP history error:', error);
@@ -299,34 +338,49 @@ router.get('/history', auth, async (req, res) => {
   }
 });
 
-// Get user activity stats
+// Get user activity stats - FIXED for dashboard display
 router.get('/activity', auth, async (req, res) => {
   try {
     const userId = req.user._id;
-    const user = await User.findById(userId).select('xp total_xp level current_streak last_active_date badges createdAt');
-    const unifiedXp = Math.max(user.xp || 0, user.total_xp || 0);
+    const user = await User.findById(userId).select('xp total_xp level current_streak last_active_date badges createdAt').lean();
+
+    // Calculate total XP from logs (single source of truth)
+    const xpStats = await XpLog.aggregate([
+      { $match: { user_id: new mongoose.Types.ObjectId(userId) } },
+      { $group: { _id: null, total: { $sum: '$xp_earned' } } }
+    ]);
+    const totalXp = xpStats[0]?.total || 0;
 
     // Get today's XP
     const todayStart = startOfDay(new Date());
     const todayEnd = new Date(todayStart);
     todayEnd.setDate(todayEnd.getDate() + 1);
 
-    const todayLogs = await XpLog.find({
-      user_id: userId,
-      timestamp: { $gte: todayStart, $lt: todayEnd }
-    });
+    const todayStats = await XpLog.aggregate([
+      { 
+        $match: { 
+          user_id: new mongoose.Types.ObjectId(userId),
+          timestamp: { $gte: todayStart, $lt: todayEnd }
+        }
+      },
+      { $group: { _id: null, total: { $sum: '$xp_earned' } } }
+    ]);
+    const todaysXp = todayStats[0]?.total || 0;
 
-    const todaysXp = todayLogs.reduce((sum, log) => sum + log.xp_earned, 0);
+    // Sync if mismatch detected
+    if (totalXp > 0 && Math.abs(totalXp - (user.total_xp || 0)) > 30) {
+      await User.findByIdAndUpdate(userId, { $set: { xp: totalXp, total_xp: totalXp } });
+    }
 
     res.json({
-      totalXp: unifiedXp,
-      xp: unifiedXp,
-      level: user.level,
-      currentStreak: user.current_streak,
+      totalXp: totalXp,
+      xp: totalXp,
+      level: Math.floor(totalXp / 100) + 1,
+      currentStreak: user.current_streak || 0,
       todaysXp: todaysXp,
       lastActive: user.last_active_date,
       joinDate: user.createdAt,
-      badges: user.badges
+      badges: user.badges || []
     });
   } catch (error) {
     console.error('Activity error:', error);
@@ -478,6 +532,61 @@ router.get('/profile-stats', auth, async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 });
+
+// Get recent activity for dashboard
+router.get('/recent-activity', auth, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { limit = 10 } = req.query;
+
+    // Get recent XP logs
+    const recentActivity = await XpLog.find({ user_id: userId })
+      .sort({ timestamp: -1 })
+      .limit(parseInt(limit))
+      .select('xp_earned activity_type timestamp metadata')
+      .lean();
+
+    // Format activity for dashboard
+    const formatted = recentActivity.map(log => ({
+      id: log._id,
+      type: log.activity_type,
+      xpEarned: log.xp_earned,
+      description: getActivityDescription(log.activity_type),
+      timestamp: log.timestamp,
+      metadata: log.metadata
+    }));
+
+    res.json({
+      success: true,
+      activities: formatted,
+      count: formatted.length
+    });
+  } catch (error) {
+    console.error('Recent activity error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Helper function to get activity description
+function getActivityDescription(activityType) {
+  const descriptions = {
+    'QUIZ_COMPLETE': 'Completed a quiz',
+    'FLASHCARD_COMPLETE': 'Reviewed flashcards',
+    'NOTE_SUMMARY': 'Summarized notes',
+    'DAILY_STREAK': 'Daily login streak',
+    'STREAK_BONUS': 'Streak bonus earned',
+    'daily_login': 'Logged in',
+    'quiz_completed': 'Quiz completed',
+    'flashcard_reviewed': 'Flashcards reviewed',
+    'group_message': 'Group message sent',
+    'file_upload': 'File uploaded',
+    'COMMUNITY_PARTICIPATION': 'Community participation',
+    'DOCUMENT_UPLOAD': 'Document uploaded',
+    'AI_TUTOR_USAGE': 'Used AI tutor',
+    'APP_ENTRY': 'Entered app'
+  };
+  return descriptions[activityType] || 'Activity completed';
+}
 
 module.exports = function(app) {
   // Set the awardXp function for other routes to use

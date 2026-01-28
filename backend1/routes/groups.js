@@ -4,6 +4,7 @@ const Group = require('../models/Group');
 const GroupMessage = require('../models/GroupMessage');
 const User = require('../models/User');
 const { transformGroupAvatar, transformMessageAvatar } = require('../middleware/avatarTransform');
+const { sendPushToUser } = require('../utils/pushNotifications');
 
 const router = express.Router();
 
@@ -143,7 +144,8 @@ router.get('/:id', auth, async (req, res) => {
     const group = await Group.findById(req.params.id)
       .populate('members.user', 'name username avatar')
       .populate('createdBy', 'name username')
-      .populate('inviteLink.createdBy', 'name username');
+      .populate('inviteLink.createdBy', 'name username')
+      .lean(); // Optimize query for read-only operation
 
     if (!group) {
       return res.status(404).json({ error: 'Group not found' });
@@ -598,6 +600,17 @@ router.post('/:id/messages', auth, async (req, res) => {
         }
       });
     }
+
+    // Push notification to group members (excluding sender)
+    const memberIds = (group.members || [])
+      .map(m => m.user?.toString())
+      .filter(id => id && id !== req.user._id.toString());
+
+    await Promise.all(memberIds.map(userId => sendPushToUser(userId, {
+      title: `${group.name} • New Message`,
+      body: content || 'New group message',
+      data: { type: 'group-message', groupId: group._id }
+    })));
 
     res.status(201).json({
       message: {
