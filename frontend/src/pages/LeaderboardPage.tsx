@@ -11,11 +11,13 @@ interface LeaderboardEntry {
   rank: number;
   name: string;
   institution: string;
-  total_xp: number;
+  total_xp: number; // All-time total XP
+  xp?: number; // Weekly XP (for Global Competition)
+  weeklyXp?: number; // Alternative field name
   avatar?: string;
 }
 
-interface GlobalLeaderboard {
+interface WeeklyLeaderboard {
   _id: string;
   title: string;
   description: string;
@@ -28,9 +30,9 @@ interface GlobalLeaderboard {
 export const LeaderboardPage: React.FC = () => {
   const { user } = useAuthStore();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'global' | 'all-time'>('all-time');
+  const [activeTab, setActiveTab] = useState<'all-time' | 'weekly'>('weekly');
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
-  const [globalLeaderboard, setGlobalLeaderboard] = useState<GlobalLeaderboard | null>(null);
+  const [weeklyLeaderboard, setWeeklyLeaderboard] = useState<WeeklyLeaderboard | null>(null);
   const [userRank, setUserRank] = useState<LeaderboardEntry | null>(null);
   const [isParticipating, setIsParticipating] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -56,13 +58,14 @@ export const LeaderboardPage: React.FC = () => {
       const userEntry = leaderboardRes.data.leaderboard.find((entry: LeaderboardEntry) => entry.id === user?.id);
       setUserRank(userEntry || null);
 
-      // Load global leaderboard
-      const globalRes = await leaderboardAPI.getActiveLeaderboard();
-      setGlobalLeaderboard(globalRes.data.leaderboard);
-
-      // Check if user is participating in global leaderboard
-      if (globalRes.data.leaderboard && globalRes.data.leaderboard.rankings) {
-        setIsParticipating(globalRes.data.leaderboard.rankings.some((r: LeaderboardEntry) => r.id === user?.id));
+      // Load weekly leaderboard (Global Competition)
+      const weeklyRes = await leaderboardAPI.getActiveLeaderboard();
+      if (weeklyRes.data.leaderboard) {
+        setWeeklyLeaderboard(weeklyRes.data.leaderboard);
+        // Check if user is participating
+        if (weeklyRes.data.leaderboard.rankings) {
+          setIsParticipating(weeklyRes.data.leaderboard.rankings.some((r: LeaderboardEntry) => r.id === user?.id));
+        }
       }
 
     } catch (err: any) {
@@ -72,25 +75,23 @@ export const LeaderboardPage: React.FC = () => {
     }
   };
 
-  const handleJoinGlobalLeaderboard = async () => {
-    if (!globalLeaderboard) return;
-
+  const handleJoinWeeklyLeaderboard = async () => {
+    if (!weeklyLeaderboard) return;
     try {
-      await leaderboardAPI.joinLeaderboard(globalLeaderboard._id);
+      await leaderboardAPI.joinLeaderboard(weeklyLeaderboard._id);
       setIsParticipating(true);
-      await loadData(); // Refresh data
+      await loadData();
     } catch (err: any) {
       setError(err.message);
     }
   };
 
-  const handleLeaveGlobalLeaderboard = async () => {
-    if (!globalLeaderboard) return;
-
+  const handleLeaveWeeklyLeaderboard = async () => {
+    if (!weeklyLeaderboard) return;
     try {
-      await leaderboardAPI.leaveLeaderboard(globalLeaderboard._id);
+      await leaderboardAPI.leaveLeaderboard(weeklyLeaderboard._id);
       setIsParticipating(false);
-      await loadData(); // Refresh data
+      await loadData();
     } catch (err: any) {
       setError(err.message);
     }
@@ -155,87 +156,18 @@ export const LeaderboardPage: React.FC = () => {
           </div>
         )}
 
-        {/* Global Leaderboard Section */}
-        {globalLeaderboard && (
-          <div className="mb-8 sm:mb-12">
-            <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-xl p-4 sm:p-6 text-white mb-4 sm:mb-6">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div className="w-full sm:w-auto">
-                  <h2 className="text-xl sm:text-2xl font-bold mb-2">{globalLeaderboard.title}</h2>
-                  <p className="text-purple-100 mb-3 sm:mb-4 text-sm sm:text-base">{globalLeaderboard.description}</p>
-                  <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs sm:text-sm">
-                    <div className="flex items-center gap-1">
-                      <Calendar size={14} className="sm:w-4 sm:h-4" />
-                      <span className="whitespace-nowrap">Ends {new Date(globalLeaderboard.endDate).toLocaleDateString()}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Users size={14} className="sm:w-4 sm:h-4" />
-                      <span>{globalLeaderboard.rankings?.length || 0} participants</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="w-full sm:w-auto sm:text-right">
-                  {globalLeaderboard.prizes.length > 0 && (
-                    <div className="mb-4">
-                      <h3 className="font-semibold mb-2">Prizes:</h3>
-                      <ul className="text-sm space-y-1">
-                        {globalLeaderboard.prizes.slice(0, 3).map((prize, idx) => {
-                          const key = typeof prize === 'string' ? `prize-${idx}-${prize}` : `prize-${prize.rank}-${idx}`;
-                          return (
-                            <li key={key}>🏆 {typeof prize === 'string' ? prize : prize.description}</li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                  )}
-                  {!isParticipating ? (
-                    <button
-                      onClick={handleJoinGlobalLeaderboard}
-                      className="w-full sm:w-auto bg-white text-purple-600 px-4 sm:px-6 py-2 rounded-lg text-sm sm:text-base font-semibold hover:bg-gray-100 transition-colors"
-                    >
-                      Join Competition
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handleLeaveGlobalLeaderboard}
-                      className="w-full sm:w-auto bg-red-500 text-white px-4 sm:px-6 py-2 rounded-lg text-sm sm:text-base font-semibold hover:bg-red-600 transition-colors"
-                    >
-                      Leave Competition
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Global Leaderboard Rankings */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-              <div className="p-4 sm:p-6 border-b border-gray-200">
-                <h3 className="text-lg sm:text-xl font-bold text-gray-900">Current Rankings</h3>
-              </div>
-              <div className="divide-y divide-gray-200">
-              {globalLeaderboard.rankings?.slice(0, 10).map((entry, idx) => (
-                <div key={`global-${entry.id}-${idx}`} className={`p-3 sm:p-4 flex items-center gap-2 sm:gap-4 ${entry.id === user?.id ? 'bg-blue-50' : ''}`}>
-                    <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ${getRankBadgeColor(entry.rank)}`}>
-                      {getRankIcon(entry.rank)}
-                    </div>
-                    <div className="flex-grow min-w-0">
-                      <p className="font-semibold text-gray-900 text-sm sm:text-base truncate">{entry.name}</p>
-                      <p className="text-xs sm:text-sm text-gray-500">{entry.total_xp} XP earned</p>
-                    </div>
-                    {entry.id === user?.id && (
-                      <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-full whitespace-nowrap flex-shrink-0">
-                        You
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Tab Navigation */}
         <div className="flex gap-1 mb-4 sm:mb-6">
+          <button
+            onClick={() => setActiveTab('weekly')}
+            className={`flex-1 sm:flex-none px-4 sm:px-6 py-2 sm:py-3 rounded-lg text-sm sm:text-base font-semibold transition-colors ${
+              activeTab === 'weekly'
+                ? 'bg-blue-600 text-white'
+                : 'bg-white text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            Global Weekly Competition
+          </button>
           <button
             onClick={() => setActiveTab('all-time')}
             className={`flex-1 sm:flex-none px-4 sm:px-6 py-2 sm:py-3 rounded-lg text-sm sm:text-base font-semibold transition-colors ${
@@ -246,19 +178,57 @@ export const LeaderboardPage: React.FC = () => {
           >
             All-Time Rankings
           </button>
-          <button
-            onClick={() => setActiveTab('global')}
-            className={`flex-1 sm:flex-none px-4 sm:px-6 py-2 sm:py-3 rounded-lg text-sm sm:text-base font-semibold transition-colors ${
-              activeTab === 'global'
-                ? 'bg-blue-600 text-white'
-                : 'bg-white text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            Global Competition
-          </button>
         </div>
 
-        {/* All-Time Leaderboard */}
+        {/* Weekly Leaderboard Card */}
+        {activeTab === 'weekly' && weeklyLeaderboard && (
+          <div className="mb-8 sm:mb-12">
+            <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-xl p-4 sm:p-6 text-white mb-4 sm:mb-6">
+              <div className="flex flex-col gap-4">
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-bold mb-2">{weeklyLeaderboard.title}</h2>
+                  <p className="text-purple-100 text-sm sm:text-base">{weeklyLeaderboard.description}</p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs sm:text-sm">
+                  <div className="flex items-center gap-1">
+                    <Calendar size={16} className="sm:w-4 sm:h-4" />
+                    <span>Ends {new Date(weeklyLeaderboard.endDate).toLocaleDateString()}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Users size={16} className="sm:w-4 sm:h-4" />
+                    <span>{weeklyLeaderboard.rankings?.length || 0} participants</span>
+                  </div>
+                </div>
+
+                {weeklyLeaderboard.prizes && weeklyLeaderboard.prizes.length > 0 && (
+                  <div>
+                    <h3 className="font-semibold mb-2 text-sm sm:text-base">Prizes:</h3>
+                    <ul className="text-xs sm:text-sm space-y-1">
+                      {weeklyLeaderboard.prizes.slice(0, 3).map((prize, idx) => {
+                        const key = typeof prize === 'string' ? `prize-${idx}-${prize}` : `prize-${prize.rank}-${idx}`;
+                        return (
+                          <li key={key}>🏆 {typeof prize === 'string' ? prize : prize.description}</li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+
+                {isParticipating && (
+                  <button
+                    onClick={handleLeaveWeeklyLeaderboard}
+                    className="w-full bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm sm:text-base font-semibold transition-colors"
+                  >
+                    Leave Competition
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* All-Time Rankings */}
         {activeTab === 'all-time' && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <div className="p-4 sm:p-6 border-b border-gray-200">
@@ -294,30 +264,31 @@ export const LeaderboardPage: React.FC = () => {
           </div>
         )}
 
-        {/* Global Competition Tab */}
-        {activeTab === 'global' && (
-          <div className="space-y-4 sm:space-y-6">
-            {!globalLeaderboard ? (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 sm:p-12 text-center">
+        {/* Weekly Competition Rankings */}
+        {activeTab === 'weekly' && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="p-4 sm:p-6 border-b border-gray-200">
+              <h3 className="text-lg sm:text-xl font-bold text-gray-900">Competition Rankings</h3>
+              <p className="text-xs sm:text-sm text-gray-600 mt-1">XP earned during the competition period</p>
+            </div>
+            {!weeklyLeaderboard || !weeklyLeaderboard.rankings || weeklyLeaderboard.rankings.length === 0 ? (
+              <div className="p-8 sm:p-12 text-center">
                 <Trophy size={48} className="text-gray-300 mx-auto mb-4 sm:w-16 sm:h-16" />
                 <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">No Active Competition</h3>
-                <p className="text-sm sm:text-base text-gray-600">Check back later for upcoming leaderboard competitions!</p>
+                <p className="text-sm sm:text-base text-gray-600">Check back later for upcoming competitions!</p>
               </div>
             ) : (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="p-4 sm:p-6 border-b border-gray-200">
-                  <h3 className="text-lg sm:text-xl font-bold text-gray-900">Competition Rankings</h3>
-                  <p className="text-xs sm:text-sm text-gray-600 mt-1">XP earned during the competition period</p>
-                </div>
-                <div className="divide-y divide-gray-200">
-                  {globalLeaderboard.rankings?.map((entry, idx) => (
-                    <div key={`comp-${entry.id}-${idx}`} className={`p-3 sm:p-4 flex items-center gap-2 sm:gap-4 ${entry.id === user?.id ? 'bg-blue-50' : ''}`}>
+              <div className="divide-y divide-gray-200">
+                {weeklyLeaderboard.rankings.map((entry, idx) => {
+                  const weeklyXp = entry.xp || entry.weeklyXp || 0;
+                  return (
+                    <div key={`weekly-${entry.id}-${idx}`} className={`p-3 sm:p-4 flex items-center gap-2 sm:gap-4 ${entry.id === user?.id ? 'bg-blue-50' : ''}`}>
                       <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ${getRankBadgeColor(entry.rank)}`}>
                         {getRankIcon(entry.rank)}
                       </div>
                       <div className="flex-grow min-w-0">
                         <p className="font-semibold text-gray-900 text-sm sm:text-base truncate">{entry.name}</p>
-                        <p className="text-xs sm:text-sm text-gray-500">{entry.total_xp} XP earned</p>
+                        <p className="text-xs sm:text-sm text-gray-500">{weeklyXp} XP earned</p>
                       </div>
                       {entry.id === user?.id && (
                         <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-full whitespace-nowrap flex-shrink-0">
@@ -325,8 +296,8 @@ export const LeaderboardPage: React.FC = () => {
                         </span>
                       )}
                     </div>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
             )}
           </div>

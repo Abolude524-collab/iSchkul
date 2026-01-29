@@ -38,7 +38,12 @@ router.post('/create', auth, async (req, res) => {
       return res.json({
         chat: {
           _id: existingChat._id,
-          participants: existingChat.participants.map(p => p._id),
+          participants: existingChat.participants.map(p => ({
+            _id: p._id,
+            name: p.name,
+            username: p.username,
+            avatar: p.avatar
+          })),
           lastMessage: existingChat.lastMessage,
           otherParticipant: otherParticipant ? {
             _id: otherParticipant._id,
@@ -64,7 +69,12 @@ router.post('/create', auth, async (req, res) => {
     res.status(201).json({
       chat: {
         _id: newChat._id,
-        participants: newChat.participants.map(p => p._id),
+        participants: newChat.participants.map(p => ({
+          _id: p._id,
+          name: p.name,
+          username: p.username,
+          avatar: p.avatar
+        })),
         lastMessage: newChat.lastMessage,
         otherParticipant: otherParticipant ? {
           _id: otherParticipant._id,
@@ -87,15 +97,20 @@ router.get('/list', auth, async (req, res) => {
     const chats = await PersonalChat.find({
       participants: req.user._id
     })
-    .populate('participants', 'name username avatar')
-    .populate('lastMessage.sender', 'name username avatar')
-    .sort({ updatedAt: -1 });
+      .populate('participants', 'name username avatar')
+      .populate('lastMessage.sender', 'name username avatar')
+      .sort({ updatedAt: -1 });
 
     const formattedChats = chats.map(chat => {
       const otherParticipant = chat.participants.find(p => p._id.toString() !== req.user._id.toString());
       return {
         _id: chat._id,
-        participants: chat.participants.map(p => p._id),
+        participants: chat.participants.map(p => ({
+          _id: p._id,
+          name: p.name,
+          username: p.username,
+          avatar: p.avatar
+        })),
         lastMessage: chat.lastMessage,
         otherParticipant: otherParticipant ? {
           _id: otherParticipant._id,

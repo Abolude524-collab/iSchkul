@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { useAuthStore } from './store'
+import { requestLimiter, getCacheKey, getTTLForEndpoint, getExponentialBackoffDelay } from './requestLimiter'
 
 // API base: backend origin + /api
 const API_ORIGIN = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
@@ -18,21 +19,79 @@ const apiClient = axios.create({
   },
 })
 
+// Track request attempts for retry logic
+const requestAttempts = new Map<string, number>();
+
 // Add token to requests
 apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem('authToken')
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
+
+  // Check for rate limiting before making request
+  const cacheKey = getCacheKey(config.method || 'GET', config.url || '');
+  if (requestLimiter.isRateLimited(cacheKey)) {
+    const waitTime = requestLimiter.getWaitTime(cacheKey);
+    console.warn(`[Rate Limited] Endpoint ${cacheKey} is rate limited. Wait ${waitTime}ms before retrying.`);
+  }
+
   return config
 })
 
-// Handle responses and redirect on auth errors
+// Handle responses and redirect on auth errors + rate limiting
 apiClient.interceptors.response.use(
-  (response) => response,
-  (error) => {
+  (response) => {
+    // Cache successful GET responses
+    if (response.config.method === 'get' || response.config.method === 'GET') {
+      const cacheKey = getCacheKey(response.config.method, response.config.url || '');
+      const ttl = getTTLForEndpoint(response.config.method, response.config.url || '');
+      requestLimiter.setCache(cacheKey, response.data, ttl);
+    }
+    
+    // Reset retry attempts on success
+    const cacheKey = getCacheKey(response.config.method || 'GET', response.config.url || '');
+    requestAttempts.delete(cacheKey);
+    
+    return response;
+  },
+  async (error) => {
     const status = error.response?.status;
     const data = error.response?.data;
+    const config = error.config;
+    const cacheKey = getCacheKey(config.method || 'GET', config.url || '');
+
+    // Handle 429 (Too Many Requests)
+    if (status === 429) {
+      const retryAfter = error.response?.headers['retry-after'];
+      const retryAfterSeconds = retryAfter ? parseInt(retryAfter) : 60;
+      
+      console.error(`[429 Rate Limited] ${config.url} - Retry after ${retryAfterSeconds}s`);
+      requestLimiter.handleRateLimit(cacheKey, retryAfterSeconds);
+
+      // Attempt retry with exponential backoff
+      const attempts = requestAttempts.get(cacheKey) || 0;
+      const maxRetries = 3;
+
+      if (attempts < maxRetries) {
+        requestAttempts.set(cacheKey, attempts + 1);
+        const delay = getExponentialBackoffDelay(attempts);
+        
+        console.log(`[Retry] Attempt ${attempts + 1}/${maxRetries} in ${delay}ms`);
+        
+        return new Promise((resolve, reject) => {
+          setTimeout(() => {
+            apiClient.request(config)
+              .then(resolve)
+              .catch(reject);
+          }, delay);
+        });
+      } else {
+        console.error(`[Exhausted Retries] ${cacheKey} failed after ${maxRetries} attempts`);
+        requestAttempts.delete(cacheKey);
+        return Promise.reject(error);
+      }
+    }
 
     if (status === 401) {
       // Check if we are offline - if so, don't clear session yet
@@ -48,8 +107,8 @@ apiClient.interceptors.response.use(
       if (window.location.pathname !== '/login') {
         window.location.href = '/login'
       }
-    } else {
-      // Log other errors for debugging
+    } else if (status !== 429) {
+      // Log other errors for debugging (but not 429 since we already logged it)
       console.error(`[API Error] ${status || 'Network'}:`, data?.error || error.message);
     }
 
@@ -79,7 +138,7 @@ export const quizAPI = {
   generateQuiz: (text: string, numQuestions: number, createdBy: string, groupId?: string) =>
     apiClient.post('/generate/quiz', { text, numQuestions, createdBy, groupId }),
   getQuiz: (quizId: string) =>
-    apiClient.get(`/quizzes/${quizId}`),
+    cachedGet(`/quizzes/${quizId}`),
   submitQuiz: (quizId: string, answers: any[], userId: string) =>
     apiClient.post(`/quizzes/${quizId}/submit`, { answers, userId }),
 }
@@ -90,9 +149,9 @@ export const groupAPI = {
   createGroup: (data: { name: string; description?: string; category?: string; isPrivate?: boolean; tags?: string[] }) =>
     apiClient.post('/groups/create', data),
   getGroups: (params?: { category?: string; role?: string; limit?: number; skip?: number }) =>
-    apiClient.get('/groups', { params }),
+    cachedGet('/groups', { params }),
   getGroup: (groupId: string) =>
-    apiClient.get(`/groups/${groupId}`),
+    cachedGet(`/groups/${groupId}`),
   updateGroup: (groupId: string, data: any) =>
     apiClient.put(`/groups/${groupId}`, data),
   deleteGroup: (groupId: string) =>
@@ -118,7 +177,7 @@ export const groupAPI = {
 
   // Messages
   getGroupMessages: (groupId: string, params?: { limit?: number; before?: string }) =>
-    apiClient.get(`/groups/${groupId}/messages`, { params }),
+    cachedGet(`/groups/${groupId}/messages`, { params }),
   sendGroupMessage: (groupId: string, data: { content: string; messageType?: string; attachments?: any[]; replyTo?: string }) =>
     apiClient.post(`/groups/${groupId}/messages`, data),
 };
@@ -128,11 +187,34 @@ export const personalChatAPI = {
   createChat: (contactId: string) =>
     apiClient.post('/personal-chat/create', { contactId }),
   listChats: () =>
-    apiClient.get('/personal-chat/list'),
+    cachedGet('/personal-chat/list'),
   getChatMessages: (chatId: string) =>
-    apiClient.get(`/personal-chat/messages/${chatId}`),
+    cachedGet(`/personal-chat/messages/${chatId}`),
   sendMessage: (chatId: string, content: string, messageType?: string) =>
     apiClient.post(`/personal-chat/send/${chatId}`, { content, messageType }),
+}
+
+// Utility to wrap GET requests with caching and deduplication
+async function cachedGet(url: string, config?: any) {
+  const cacheKey = getCacheKey('GET', url);
+  
+  // Check cache first
+  const cached = requestLimiter.getFromCache(cacheKey);
+  if (cached) {
+    return { data: cached, fromCache: true };
+  }
+
+  // Check if request is already in flight
+  const pending = requestLimiter.getPendingRequest(cacheKey);
+  if (pending) {
+    return pending;
+  }
+
+  // Make new request
+  const request = apiClient.get(url, config);
+  requestLimiter.setPendingRequest(cacheKey, request);
+  
+  return request;
 }
 
 // Gamification endpoints
@@ -148,27 +230,27 @@ export const gamificationAPI = {
     });
   },
   getUserStats: () =>
-    apiClient.get('/gamification/activity'),
+    cachedGet('/gamification/activity'),
   userEnter: () =>
     apiClient.post('/gamification/enter'),
   getLeaderboard: () =>
-    apiClient.get('/gamification/leaderboard'),
+    cachedGet('/gamification/leaderboard'),
   getXpHistory: (limit: number = 50) =>
-    apiClient.get('/gamification/history', { params: { limit } }),
+    cachedGet('/gamification/history', { params: { limit } }),
   getUserActivity: () =>
-    apiClient.get('/gamification/activity'),
+    cachedGet('/gamification/activity'),
   getProfileStats: () =>
-    apiClient.get('/gamification/profile-stats'),
+    cachedGet('/gamification/profile-stats'),
   joinLeaderboard: () =>
     apiClient.post('/gamification/join-leaderboard'),
   leaveLeaderboard: () =>
     apiClient.post('/gamification/leave-leaderboard'),
   getUserBadges: () =>
-    apiClient.get('/gamification/badges'),
+    cachedGet('/gamification/badges'),
   getUserAwards: () =>
-    apiClient.get('/gamification/awards'),
+    cachedGet('/gamification/awards'),
   getStreak: () =>
-    apiClient.get('/gamification/streak'),
+    cachedGet('/gamification/streak'),
 }
 
 // Leaderboard management endpoints
@@ -176,9 +258,9 @@ export const leaderboardAPI = {
   createLeaderboard: (data: { title: string; description?: string; durationDays: number; prizes?: string[]; isRestricted?: boolean; allowedUsers?: string[] }) =>
     apiClient.post('/leaderboard/create', data),
   listLeaderboards: () =>
-    apiClient.get('/leaderboard/list'),
+    cachedGet('/leaderboard/list'),
   getActiveLeaderboard: () =>
-    apiClient.get('/leaderboard/active'),
+    cachedGet('/leaderboard/active'),
   joinLeaderboard: (leaderboardId: string) =>
     apiClient.post('/leaderboard/join', { leaderboardId }),
   leaveLeaderboard: (leaderboardId: string) =>
@@ -186,15 +268,15 @@ export const leaderboardAPI = {
   endLeaderboard: (leaderboardId: string) =>
     apiClient.post('/leaderboard/end', { leaderboardId }),
   getLeaderboardParticipants: (leaderboardId: string) =>
-    apiClient.get('/leaderboard/participants', { params: { leaderboardId } }),
+    cachedGet('/leaderboard/participants', { params: { leaderboardId } }),
 }
 
 // Student of the Week endpoints
 export const sotwAPI = {
   getCurrent: () =>
-    apiClient.get('/sotw/current'),
+    cachedGet('/sotw/current'),
   getArchive: () =>
-    apiClient.get('/sotw/archive'),
+    cachedGet('/sotw/archive'),
   submitQuote: (quote: string) =>
     apiClient.post('/sotw/quote', { quote }),
 }
@@ -220,13 +302,13 @@ export const flashcardSetsAPI = {
 // Users endpoints
 export const usersAPI = {
   searchUsers: (query: string) =>
-    apiClient.get('/users/search', { params: { q: query } }),
+    cachedGet('/users/search', { params: { q: query } }),
   getUser: (userId: string) =>
-    apiClient.get(`/users/${userId}`),
+    cachedGet(`/users/${userId}`),
   getUserBadges: (userId: string) =>
-    apiClient.get(`/users/${userId}/badges`),
+    cachedGet(`/users/${userId}/badges`),
   getMyBadges: () =>
-    apiClient.get('/users/badges/my'),
+    cachedGet('/users/badges/my'),
 }
 
 // Flashcard endpoints

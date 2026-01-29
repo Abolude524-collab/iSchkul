@@ -161,6 +161,16 @@ export const ChatPage: React.FC = () => {
   const socketRef = useRef<Socket | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messageIdsRef = useRef<Set<string>>(new Set()); // Track message IDs for deduplication
+
+  // Auto-scroll to bottom when new messages arrive
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, chatMessages]);
 
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showGroupMembers, setShowGroupMembers] = useState(false);
@@ -212,23 +222,45 @@ export const ChatPage: React.FC = () => {
 
     socketRef.current.on('new-message', (message) => {
       console.log('Received new-message event:', message);
+      
+      // Prevent duplicate messages
+      if (messageIdsRef.current.has(message._id)) {
+        console.log('Duplicate message ignored:', message._id);
+        return;
+      }
+      messageIdsRef.current.add(message._id);
+      
       if (selectedGroup && message.groupId === selectedGroup._id) {
         console.log('Adding message to current group');
         setMessages(prev => {
           const currentMessages = Array.isArray(prev) ? prev : [];
+          // Double-check no duplicates
+          if (currentMessages.some(m => m._id === message._id)) {
+            return currentMessages;
+          }
           return [...currentMessages, message];
         });
-      } else {
-        console.log('Message not for current group', { selectedGroup: selectedGroup?._id, messageGroup: message.groupId });
       }
     });
 
     socketRef.current.on('group-message', (message: GroupMessage) => {
       console.log('Received group-message event:', message);
+      
+      // Prevent duplicate messages
+      if (messageIdsRef.current.has(message._id)) {
+        console.log('Duplicate group message ignored:', message._id);
+        return;
+      }
+      messageIdsRef.current.add(message._id);
+      
       if (selectedGroup && message.groupId === selectedGroup._id) {
         console.log('Adding group message to current group');
         setMessages(prev => {
           const currentMessages = Array.isArray(prev) ? prev : [];
+          // Double-check no duplicates
+          if (currentMessages.some(m => m._id === message._id)) {
+            return currentMessages;
+          }
           return [...currentMessages, message];
         });
       }
@@ -252,7 +284,16 @@ export const ChatPage: React.FC = () => {
 
     socketRef.current.on('personal-message', (data) => {
       const { chatId, message } = data;
+      
+      // Prevent duplicate messages
+      if (messageIdsRef.current.has(message._id)) {
+        console.log('Duplicate personal message ignored:', message._id);
+        return;
+      }
+      messageIdsRef.current.add(message._id);
+      
       if (selectedPersonalChat && chatId === selectedPersonalChat._id) {
+        console.log('Received personal message:', message);
         addChatMessage(message);
       }
     });

@@ -119,7 +119,10 @@ export const StudentOfTheWeek: React.FC = () => {
       <div className="flex items-center justify-between gap-2 mb-6">
         <div className="flex items-center gap-2">
           <Crown className="text-yellow-500" size={24} />
-          <h3 className="text-xl font-bold text-gray-900">Student of the Week</h3>
+          <div>
+            <h3 className="text-xl font-bold text-gray-900">Student of the Week</h3>
+            <p className="text-xs text-gray-500">Last week's winner</p>
+          </div>
         </div>
         {sotwData?.current && (
           <button

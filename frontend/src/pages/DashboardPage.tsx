@@ -28,7 +28,30 @@ const startOfDayKey = (date: Date) => {
 };
 
 const getActivityDetails = (activity: any) => {
-  const type = activity.activity_type.toUpperCase();
+  // Defensive check: ensure activity exists
+  if (!activity) {
+    return {
+      icon: Zap,
+      color: 'bg-gray-100 text-gray-600',
+      title: 'Activity',
+      subtitle: 'Unknown activity'
+    };
+  }
+
+  // Get activity type from either field name (camelCase or snake_case)
+  const activityType = activity.activity_type || activity.activityType;
+  
+  // Defensive check: ensure activity_type exists
+  if (!activityType) {
+    return {
+      icon: Zap,
+      color: 'bg-gray-100 text-gray-600',
+      title: 'Activity',
+      subtitle: 'Unknown activity'
+    };
+  }
+
+  const type = activityType.toUpperCase();
   const metadata = activity.metadata || {};
 
   switch (type) {
@@ -451,7 +474,7 @@ export const DashboardPage: React.FC = () => {
                     </div>
                     <div className="flex flex-col items-end">
                       <span className="bg-green-100 text-green-700 text-xs font-bold px-2.5 py-1 rounded-lg">
-                        +{activity.xp_earned} XP
+                        +{(activity.xp_earned || activity.xpEarned || 0)} XP
                       </span>
                     </div>
                   </div>
