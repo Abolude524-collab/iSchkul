@@ -3,6 +3,7 @@ import { Bell, Check, CheckCheck, Clock, AlertCircle, Info, X } from 'lucide-rea
 import { useAuthStore } from '../services/store';
 import { getAPIEndpoint } from '../services/api';
 import { io, Socket } from 'socket.io-client';
+import { Navbar } from '../components/Navbar';
 
 interface Notification {
   id: string;
@@ -181,6 +182,7 @@ export const NotificationPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <Navbar/>
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">

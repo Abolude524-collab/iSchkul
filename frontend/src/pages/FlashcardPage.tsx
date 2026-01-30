@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams, useBeforeUnload } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
-import { Footer } from '../components/Footer';
 import { useAuthStore } from '../services/store';
 import { gamificationAPI, flashcardSetsAPI, flashcardAPI } from '../services/api';
 import { Loader, AlertCircle, CheckCircle, Clock, BookOpen, Upload, ArrowLeft, Plus, Share2, Edit, Trash2, Eye, Copy, Brain, Target, TrendingUp, Zap, FileText, Sparkles, RotateCcw, ChevronRight, Star, BarChart3 } from 'lucide-react';
@@ -977,7 +976,6 @@ export const FlashcardPage: React.FC = () => {
             <p className="text-gray-600">Loading flashcards...</p>
           </div>
         </div>
-        <Footer />
       </div>
     );
   }
@@ -1413,7 +1411,6 @@ export const FlashcardPage: React.FC = () => {
         </div>
       )}
 
-      <Footer />
     </div>
   );
 };

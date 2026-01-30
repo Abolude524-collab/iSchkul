@@ -4,7 +4,7 @@ import { User, Mail, Lock, Eye, EyeOff, Loader, AlertCircle } from 'lucide-react
 import { useAuthStore } from '../services/store';
 import { getAPIEndpoint } from '../services/api';
 import { Navbar } from '../components/Navbar';
-import { Footer } from '../components/Footer';
+
 
 export const SignupPage: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -325,7 +325,6 @@ export const SignupPage: React.FC = () => {
         </div>
       </div>
 
-      <Footer />
     </div>
   );
 };

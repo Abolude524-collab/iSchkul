@@ -1,7 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
-import { Footer } from '../components/Footer';
 import { useAuthStore } from '../services/store';
 import { getAPIEndpoint } from '../services/api';
 import { Send, Upload, Loader, MessageSquare } from 'lucide-react';
@@ -207,7 +206,6 @@ export const ReaderPage: React.FC = () => {
         </div>
       </div>
 
-      <Footer />
     </div>
   );
 };

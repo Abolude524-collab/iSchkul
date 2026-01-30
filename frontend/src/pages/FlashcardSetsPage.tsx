@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
-import { Footer } from '../components/Footer';
 import { useAuthStore } from '../services/store';
 import { flashcardSetsAPI, flashcardAPI } from '../services/api';
 import { Loader, Plus, Share2, Edit, Trash2, BookOpen, Eye, Copy, CheckCircle } from 'lucide-react';

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useBeforeUnload } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
-import { Footer } from '../components/Footer';
 import { useAuthStore } from '../services/store';
 import { gamificationAPI, getAPIEndpoint } from '../services/api';
 import { Loader, AlertCircle, CheckCircle, XCircle, Brain, Calculator, Plus, BookOpen, Trophy, Clock, Edit, Trash2, Play, Share2, History, TrendingUp, BarChart2, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -2225,7 +2224,7 @@ export const QuizPage: React.FC = () => {
         )}
       </div>
 
-      <Footer />
+
     </div>
   );
 };

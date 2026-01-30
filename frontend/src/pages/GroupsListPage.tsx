@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { groupAPI, personalChatAPI } from '../services/api';
 import { useAuthStore } from '../services/store';
-import { Navbar } from '../components/Navbar';
+
 
 interface Group {
   _id: string;

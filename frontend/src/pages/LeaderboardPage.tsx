@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
-import { Footer } from '../components/Footer';
 import { useAuthStore } from '../services/store';
 import { leaderboardAPI, gamificationAPI } from '../services/api';
 import { Trophy, Users, Calendar, Award, Crown, Target, TrendingUp, Medal } from 'lucide-react';
@@ -130,7 +129,6 @@ export const LeaderboardPage: React.FC = () => {
         <div className="flex-grow flex items-center justify-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
         </div>
-        <Footer />
       </div>
     );
   }
@@ -304,7 +302,6 @@ export const LeaderboardPage: React.FC = () => {
         )}
       </div>
 
-      <Footer />
     </div>
   );
 };

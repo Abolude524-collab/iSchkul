@@ -4,7 +4,7 @@ import { Mail, Lock, Eye, EyeOff, Loader } from 'lucide-react';
 import { useAuthStore } from '../services/store';
 import { getAPIEndpoint } from '../services/api';
 import { Navbar } from '../components/Navbar';
-import { Footer } from '../components/Footer';
+
 
 export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -172,7 +172,6 @@ export const LoginPage: React.FC = () => {
         </div>
       </div>
 
-      <Footer />
     </div>
   );
 };
