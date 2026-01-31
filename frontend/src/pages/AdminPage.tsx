@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 //import { Footer } from '../components/Footer';
 import { useAuthStore } from '../services/store';
-import { leaderboardAPI } from '../services/api';
+import { leaderboardAPI, getAPIEndpoint } from '../services/api';
 import {
   Users,
   BarChart3,
@@ -153,7 +153,7 @@ export const AdminPage: React.FC = () => {
 
       // Load analytics
       const analyticsResponse = await fetch(
-        `getAPIEndpoint('/admin/analytics/overview`,
+        getAPIEndpoint('/admin/analytics/overview'),
         {
           headers: { Authorization: `Bearer ${token}` }
         }
@@ -166,7 +166,7 @@ export const AdminPage: React.FC = () => {
 
       // Load users
       const usersResponse = await fetch(
-        `getAPIEndpoint('/admin/users`,
+        getAPIEndpoint('/admin/users'),
         {
           headers: { Authorization: `Bearer ${token}` }
         }
@@ -191,7 +191,7 @@ export const AdminPage: React.FC = () => {
 
       // Load sent notifications
       const notificationsResponse = await fetch(
-        `getAPIEndpoint('/admin/notifications/sent`,
+        getAPIEndpoint('/admin/notifications/sent'),
         {
           headers: { Authorization: `Bearer ${token}` }
         }
@@ -214,7 +214,7 @@ export const AdminPage: React.FC = () => {
     try {
       const token = localStorage.getItem('authToken');
       const response = await fetch(
-        `getAPIEndpoint('/admin/notifications/send`,
+        getAPIEndpoint('/admin/notifications/send'),
         {
           method: 'POST',
           headers: {
@@ -241,7 +241,7 @@ export const AdminPage: React.FC = () => {
     try {
       const token = localStorage.getItem('authToken');
       await fetch(
-        `getAPIEndpoint('/admin/users/role`,
+        getAPIEndpoint('/admin/users/role'),
         {
           method: 'PUT',
           headers: {
@@ -261,7 +261,7 @@ export const AdminPage: React.FC = () => {
     try {
       const token = localStorage.getItem('authToken');
       const response = await fetch(
-        `getAPIEndpoint('/admin/sync-xp`,
+        getAPIEndpoint('/admin/sync-xp'),
         {
           method: 'POST',
           headers: {
@@ -290,7 +290,7 @@ export const AdminPage: React.FC = () => {
     try {
       const token = localStorage.getItem('authToken');
       const response = await fetch(
-        `getAPIEndpoint('/admin/sync-all-xp`,
+        getAPIEndpoint('/admin/sync-all-xp'),
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` }
@@ -318,7 +318,7 @@ export const AdminPage: React.FC = () => {
     try {
       const token = localStorage.getItem('authToken');
       const response = await fetch(
-        `getAPIEndpoint('/admin/recalculate-sotw`,
+        getAPIEndpoint('/admin/recalculate-sotw'),
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` }
@@ -469,11 +469,10 @@ export const AdminPage: React.FC = () => {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
-                    activeTab === tab.id
-                      ? 'bg-blue-100 text-blue-700 border-b-2 border-blue-600'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                  }`}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${activeTab === tab.id
+                    ? 'bg-blue-100 text-blue-700 border-b-2 border-blue-600'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    }`}
                 >
                   <tab.icon className="h-5 w-5" />
                   {tab.label}
@@ -674,7 +673,7 @@ export const AdminPage: React.FC = () => {
                       <input
                         type="text"
                         value={leaderboardForm.title}
-                        onChange={(e) => setLeaderboardForm({...leaderboardForm, title: e.target.value})}
+                        onChange={(e) => setLeaderboardForm({ ...leaderboardForm, title: e.target.value })}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         required
                       />
@@ -684,7 +683,7 @@ export const AdminPage: React.FC = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                       <textarea
                         value={leaderboardForm.description}
-                        onChange={(e) => setLeaderboardForm({...leaderboardForm, description: e.target.value})}
+                        onChange={(e) => setLeaderboardForm({ ...leaderboardForm, description: e.target.value })}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         rows={3}
                       />
@@ -695,7 +694,7 @@ export const AdminPage: React.FC = () => {
                       <input
                         type="number"
                         value={leaderboardForm.durationDays}
-                        onChange={(e) => setLeaderboardForm({...leaderboardForm, durationDays: parseInt(e.target.value)})}
+                        onChange={(e) => setLeaderboardForm({ ...leaderboardForm, durationDays: parseInt(e.target.value) })}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         min="1"
                         required
@@ -739,7 +738,7 @@ export const AdminPage: React.FC = () => {
                         type="checkbox"
                         id="restricted"
                         checked={leaderboardForm.isRestricted}
-                        onChange={(e) => setLeaderboardForm({...leaderboardForm, isRestricted: e.target.checked})}
+                        onChange={(e) => setLeaderboardForm({ ...leaderboardForm, isRestricted: e.target.checked })}
                         className="rounded"
                       />
                       <label htmlFor="restricted" className="text-sm text-gray-700">
@@ -789,11 +788,10 @@ export const AdminPage: React.FC = () => {
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                              leaderboard.status === 'active'
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-gray-100 text-gray-800'
-                            }`}>
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${leaderboard.status === 'active'
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-gray-100 text-gray-800'
+                              }`}>
                               {leaderboard.status}
                             </span>
                           </td>
@@ -814,7 +812,7 @@ export const AdminPage: React.FC = () => {
                                   End
                                 </button>
                               )}
-                              <button 
+                              <button
                                 onClick={() => viewLeaderboard(leaderboard._id)}
                                 className="text-blue-600 hover:text-blue-900 flex items-center gap-1"
                               >
@@ -845,7 +843,7 @@ export const AdminPage: React.FC = () => {
                     <input
                       type="text"
                       value={notificationForm.title}
-                      onChange={(e) => setNotificationForm({...notificationForm, title: e.target.value})}
+                      onChange={(e) => setNotificationForm({ ...notificationForm, title: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="Notification title"
                       required
@@ -856,7 +854,7 @@ export const AdminPage: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
                     <textarea
                       value={notificationForm.message}
-                      onChange={(e) => setNotificationForm({...notificationForm, message: e.target.value})}
+                      onChange={(e) => setNotificationForm({ ...notificationForm, message: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       rows={4}
                       placeholder="Notification message"
@@ -868,7 +866,7 @@ export const AdminPage: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
                     <select
                       value={notificationForm.type}
-                      onChange={(e) => setNotificationForm({...notificationForm, type: e.target.value})}
+                      onChange={(e) => setNotificationForm({ ...notificationForm, type: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="info">Info</option>
@@ -905,12 +903,11 @@ export const AdminPage: React.FC = () => {
                             <div className="flex-1">
                               <div className="flex items-center gap-2 mb-2">
                                 <h4 className="font-semibold text-gray-900">{notification.title}</h4>
-                                <span className={`px-2 py-1 text-xs rounded-full ${
-                                  notification.type === 'info' ? 'bg-blue-100 text-blue-800' :
+                                <span className={`px-2 py-1 text-xs rounded-full ${notification.type === 'info' ? 'bg-blue-100 text-blue-800' :
                                   notification.type === 'success' ? 'bg-green-100 text-green-800' :
-                                  notification.type === 'warning' ? 'bg-yellow-100 text-yellow-800' :
-                                  'bg-red-100 text-red-800'
-                                }`}>
+                                    notification.type === 'warning' ? 'bg-yellow-100 text-yellow-800' :
+                                      'bg-red-100 text-red-800'
+                                  }`}>
                                   {notification.type}
                                 </span>
                               </div>
@@ -943,11 +940,10 @@ export const AdminPage: React.FC = () => {
                 <p className="text-sm text-gray-600 mb-6">Sync user XP and recalculate Student of the Week awards</p>
 
                 {syncMessage && (
-                  <div className={`mb-4 p-4 rounded-lg ${
-                    syncMessage.startsWith('✓')
-                      ? 'bg-green-50 text-green-800 border border-green-200'
-                      : 'bg-red-50 text-red-800 border border-red-200'
-                  }`}>
+                  <div className={`mb-4 p-4 rounded-lg ${syncMessage.startsWith('✓')
+                    ? 'bg-green-50 text-green-800 border border-green-200'
+                    : 'bg-red-50 text-red-800 border border-red-200'
+                    }`}>
                     {syncMessage}
                   </div>
                 )}
