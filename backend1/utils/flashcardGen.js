@@ -211,6 +211,12 @@ async function extractText(buffer, mimeType, filename = '') {
 
 // Generates flashcards using Gemini AI
 async function generateFlashcardsFromText(text, numCards = 10) {
+  const { filterContentForQuizGeneration } = require('./contentFilter');
+
+  // Filter out boilerplate content (TOC, Acknowledgements, etc.)
+  const { extracted } = filterContentForQuizGeneration(text);
+  const cleanText = extracted || text;
+
   const prompt = `Extract key information from this text and create exactly ${numCards} academic flashcards.
 
 Return ONLY a JSON array of objects with "question" and "answer" fields.
@@ -224,48 +230,54 @@ Example format:
 ]
 
 Text to analyze:
-${text}`;
+${cleanText}`;
 
   let output = '';
 
-  // Try Gemini first
+  // Try OpenAI first
   try {
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const { createChatCompletion } = require('./openaiClient');
+    // Try models in order of preference (cost/performance balance)
+    const models = ['gpt-4o-mini', 'gpt-3.5-turbo', 'gpt-4o'];
 
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    output = response.text();
+    for (const model of models) {
+      try {
+        const resp = await createChatCompletion({
+          model,
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.7,
+          max_tokens: 2000
+        });
+        output = resp?.choices?.[0]?.message?.content || '';
 
-    if (output && output.trim()) {
-      console.log('[flashcardGen] Gemini generation successful');
-    }
-  } catch (err) {
-    console.warn('[flashcardGen] Gemini failed:', err.message);
-    // Try OpenAI as fallback
-    try {
-      const { createChatCompletion } = require('./openaiClient');
-      const models = ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'];
-
-      for (const model of models) {
-        try {
-          const resp = await createChatCompletion({
-            model,
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.7,
-            max_tokens: 2000
-          });
-          output = resp?.choices?.[0]?.message?.content || '';
-          if (output && output.trim()) {
-            console.log(`[flashcardGen] OpenAI ${model} successful`);
-            break;
-          }
-        } catch (modelErr) {
-          console.warn(`[flashcardGen] OpenAI ${model} failed:`, modelErr.message);
+        if (output && output.trim()) {
+          console.log(`[flashcardGen] OpenAI ${model} successful`);
+          break;
         }
+      } catch (modelErr) {
+        console.warn(`[flashcardGen] OpenAI ${model} failed:`, modelErr.message);
       }
-    } catch (openaiErr) {
-      console.warn('[flashcardGen] All AI models failed');
+    }
+  } catch (openaiErr) {
+    console.warn('[flashcardGen] OpenAI client error:', openaiErr.message);
+  }
+
+  // If OpenAI failed (output empty), try Gemini as fallback
+  if (!output || !output.trim()) {
+    try {
+      console.log('[flashcardGen] OpenAI failed or returned empty. Attempting Gemini AI fallback...');
+      const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      output = response.text();
+
+      if (output && output.trim()) {
+        console.log('[flashcardGen] Gemini generation successful');
+      }
+    } catch (err) {
+      console.warn('[flashcardGen] Gemini failed:', err.message);
     }
   }
 

@@ -164,14 +164,24 @@ export function getExponentialBackoffDelay(attempt: number, baseDelay: number = 
  * Request cache key generator
  * Includes method, URL, and relevant query params
  */
-export function getCacheKey(method: string, url: string, data?: any): string {
-  const baseKey = `${method.toUpperCase()}:${url}`;
-  
+export function getCacheKey(method: string, url: string, data?: any, params?: any): string {
+  let baseKey = `${method.toUpperCase()}:${url}`;
+
+  // Include query params in key for GET requests (or any request with params)
+  if (params && Object.keys(params).length > 0) {
+    // Sort keys to ensure consistency (page=1&limit=10 vs limit=10&page=1)
+    const sortedParams = Object.keys(params).sort().reduce((obj: any, key) => {
+      obj[key] = params[key];
+      return obj;
+    }, {});
+    baseKey += `?${JSON.stringify(sortedParams)}`;
+  }
+
   // Include data in key for POST/PUT requests
   if (data && (method === 'POST' || method === 'PUT')) {
     return `${baseKey}:${JSON.stringify(data)}`;
   }
-  
+
   return baseKey;
 }
 
@@ -182,23 +192,23 @@ export function getCacheKey(method: string, url: string, data?: any): string {
 export const CACHE_KEYS = {
   // User endpoints
   'GET:/users/me': { ttl: 5 * 60 * 1000 }, // 5 mins
-  
+
   // Notifications - frequent updates
   'GET:/notifications/count': { ttl: 30 * 1000 }, // 30 secs
   'GET:/notifications': { ttl: 30 * 1000 },
-  
+
   // Chat - medium frequency
   'GET:/chat/messages': { ttl: 60 * 1000 }, // 1 min
   'GET:/personal-chat/messages': { ttl: 60 * 1000 },
-  
+
   // Groups - lower frequency
   'GET:/groups': { ttl: 5 * 60 * 1000 }, // 5 mins
   'GET:/groups/': { ttl: 5 * 60 * 1000 },
-  
+
   // Gamification
   'GET:/gamification': { ttl: 2 * 60 * 1000 }, // 2 mins
   'GET:/leaderboard': { ttl: 5 * 60 * 1000 }, // 5 mins
-  
+
   // Files - long cache (content rarely changes)
   'GET:/files': { ttl: 10 * 60 * 1000 }, // 10 mins
 };
@@ -208,19 +218,19 @@ export const CACHE_KEYS = {
  */
 export function getTTLForEndpoint(method: string, url: string): number {
   const key = `${method}:${url}`;
-  
+
   // Check exact match first
   if (CACHE_KEYS[key as keyof typeof CACHE_KEYS]) {
     return CACHE_KEYS[key as keyof typeof CACHE_KEYS].ttl;
   }
-  
+
   // Check prefix matches
   for (const [cacheKey, config] of Object.entries(CACHE_KEYS)) {
     if (key.startsWith(cacheKey.replace(/\/$/, ''))) {
       return config.ttl;
     }
   }
-  
+
   // Default TTL
   return 5 * 60 * 1000; // 5 minutes
 }

@@ -11,6 +11,7 @@ import { QuestionRenderer } from '../components/QuestionRenderer';
 import { Question as QuizQuestion, QuizCreateForm } from '../types/quiz';
 import { OfflineDownloadButton } from '../components/OfflineDownloadButton';
 import { getQuizzesByUser, getAllQuizzes, getQuiz, saveQuizAttempt } from '../services/indexedDB';
+import { LeaderboardModal } from '../components/LeaderboardModal';
 
 type Question = QuizQuestion;
 
@@ -74,8 +75,8 @@ export const QuizPage: React.FC = () => {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
 
   // Quiz creation/editing
+  // Only collect subject name for quiz creation
   const [createForm, setCreateForm] = useState<QuizCreateForm>({
-    title: '',
     subject: '',
     description: '',
     difficulty: 'medium',
@@ -96,6 +97,10 @@ export const QuizPage: React.FC = () => {
 
   // Calculator
   const [showCalculator, setShowCalculator] = useState(false);
+
+  // Leaderboard modal state
+  const [leaderboardQuizId, setLeaderboardQuizId] = useState<string | null>(null);
+  const [leaderboardQuizTitle, setLeaderboardQuizTitle] = useState<string>('');
   const [calcDisplay, setCalcDisplay] = useState('0');
   const [calcPreviousValue, setCalcPreviousValue] = useState<number | null>(null);
   const [calcOperation, setCalcOperation] = useState<string | null>(null);
@@ -345,16 +350,16 @@ export const QuizPage: React.FC = () => {
         const type = q.type || 'mcq_single';
         const correctAnswers = q.correctAnswers || (typeof q.correctAnswer === 'number' ? [q.correctAnswer] : []);
         const correctAnswerBoolean = q.correctAnswerBoolean;
-        
-        return { 
+
+        return {
           ...q,
-          text, 
-          options, 
-          correctAnswer, 
+          text,
+          options,
+          correctAnswer,
           correctAnswers,
           correctAnswerBoolean,
           explanation,
-          type 
+          type
         } as Question;
       });
 
@@ -429,7 +434,7 @@ export const QuizPage: React.FC = () => {
       setLoading(true);
       const token = localStorage.getItem('authToken');
       const timeSpent = startTime ? Math.floor((new Date().getTime() - startTime.getTime()) / 1000) : 0;
-      
+
       const submitResponse = await fetch(
         getAPIEndpoint(`/quizzes/${currentQuiz._id}/submit`),
         {
@@ -613,7 +618,7 @@ export const QuizPage: React.FC = () => {
     try {
       setLoading(true);
       setError('');
-      
+
       // SPEED OPTIMIZATION: Check offline status immediately
       if (!navigator.onLine) {
         console.log('Detected offline status, loading quizzes from storage...');
@@ -628,7 +633,7 @@ export const QuizPage: React.FC = () => {
       const response = await fetch(getAPIEndpoint('/quizzes'), {
         headers: { Authorization: `Bearer ${token}` },
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setQuizzes(data.quizzes);
@@ -649,19 +654,19 @@ export const QuizPage: React.FC = () => {
     try {
       let offlineQuizzes = [];
       const currentUserId = user?._id || user?.id;
-      
+
       console.log('Loading quizzes from offline storage...', { userId: currentUserId });
-      
+
       if (currentUserId) {
         offlineQuizzes = await getQuizzesByUser(currentUserId);
       }
-      
+
       // Secondary fallback: get all local quizzes if user filtered return nothing
       if (!offlineQuizzes || offlineQuizzes.length === 0) {
         console.log('No user-specific quizzes found, fetching all local quizzes...');
         offlineQuizzes = await getAllQuizzes();
       }
-      
+
       if (offlineQuizzes && offlineQuizzes.length > 0) {
         console.log(`Successfully loaded ${offlineQuizzes.length} offline quizzes`);
         setQuizzes(offlineQuizzes);
@@ -723,7 +728,7 @@ export const QuizPage: React.FC = () => {
         setQuizzes([data.quiz, ...quizzes]);
         setView('dashboard');
         resetCreateForm();
-        
+
         // Show XP reward notification
         if (data.xpAwarded) {
           alert(`✅ Quiz created successfully! You earned ${data.xpAwarded} XP`);
@@ -747,7 +752,7 @@ export const QuizPage: React.FC = () => {
     try {
       setLoading(true);
       setError('');
-      
+
       let fullQuiz = null;
 
       // 1. Try fetching from network if online
@@ -842,13 +847,13 @@ export const QuizPage: React.FC = () => {
             setQuizResult(data.result);
             setSubmitted(true);
             setView('results');
-            
+
             // Show XP reward notification
             const xpFromScore = data.result?.percentage >= 80 ? 20 : data.result?.percentage >= 60 ? 15 : 10;
             if (xpFromScore) {
               alert(`🎉 Quiz completed! You earned ${xpFromScore} XP`);
             }
-            
+
             // Refresh user stats to reflect the XP awarded by backend
             refreshUserStats().catch(e => console.warn('Stats refresh failed', e));
             return;
@@ -861,7 +866,7 @@ export const QuizPage: React.FC = () => {
       // 2. Offline Fallback: Save attempt to IndexedDB
       console.log('Saving quiz attempt to offline storage...');
       await saveQuizAttempt(attemptData);
-      
+
       // Still show the local result to the user
       setQuizResult({
         quiz: selectedQuiz._id,
@@ -872,7 +877,7 @@ export const QuizPage: React.FC = () => {
         totalQuestions: selectedQuiz.questions.length,
         createdAt: new Date().toISOString()
       } as any);
-      
+
       setSubmitted(true);
       setView('results');
       alert('You are offline. Your quiz result has been saved locally and will sync when you are back online.');
@@ -1012,7 +1017,6 @@ export const QuizPage: React.FC = () => {
   useEffect(() => {
     if (view === 'edit' && selectedQuiz) {
       setCreateForm({
-        title: selectedQuiz.title,
         subject: selectedQuiz.subject,
         description: selectedQuiz.description || '',
         difficulty: selectedQuiz.difficulty,
@@ -1099,9 +1103,9 @@ export const QuizPage: React.FC = () => {
                     <div className="flex justify-between items-start mb-4">
                       <div className="flex-1">
                         <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                          {quiz.title && quiz.title !== 'Content-Based Quiz' ? quiz.title : quiz.subject || 'General Quiz'}
+                          {quiz.subject || 'Untitled Quiz'}
                         </h3>
-                        <p className="text-sm text-gray-600">{quiz.subject || 'General'}</p>
+                        <p className="text-sm text-gray-600">{quiz.subject || 'No subject'}</p>
                       </div>
                       <div className="flex gap-2">
                         <button
@@ -1193,6 +1197,17 @@ export const QuizPage: React.FC = () => {
                           <Share2 size={16} />
                         </button>
                       )}
+
+                      <button
+                        onClick={() => {
+                          setLeaderboardQuizId(quiz._id);
+                          setLeaderboardQuizTitle(quiz.title);
+                        }}
+                        className="px-4 py-2 bg-yellow-500 text-white font-semibold rounded-lg hover:bg-yellow-600 transition-all text-sm flex items-center justify-center gap-2"
+                        title="View Leaderboard"
+                      >
+                        <Trophy size={16} />
+                      </button>
                     </div>
 
                     {quiz.createdBy && (
@@ -1221,7 +1236,18 @@ export const QuizPage: React.FC = () => {
               </div>
 
               {/* Quiz Settings */}
-              <QuizSettingsForm form={createForm} onChange={setCreateForm} />
+              {/* Subject input for custom quiz creation */}
+              <div className="mb-4">
+                <label className="block text-gray-700 font-semibold mb-2">Subject <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={createForm.subject}
+                  onChange={e => setCreateForm({ ...createForm, subject: e.target.value })}
+                  placeholder="e.g., Mathematics, History"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                  required
+                />
+              </div>
 
               {/* Questions */}
               <QuestionListEditor questions={questions} onChange={setQuestions} />
@@ -1230,7 +1256,7 @@ export const QuizPage: React.FC = () => {
               <div className="flex gap-4">
                 <button
                   onClick={createQuiz}
-                  disabled={loading || !createForm.title.trim() || !createForm.subject.trim() || questions.length === 0}
+                  disabled={loading || !createForm.subject.trim() || questions.length === 0}
                   className="flex-1 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-lg hover:shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {loading ? (
@@ -1266,6 +1292,7 @@ export const QuizPage: React.FC = () => {
                   onClick={() => {
                     setSelectedQuiz(null);
                     setView('dashboard');
+                    resetCreateForm();
                   }}
                   className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
                 >
@@ -1273,89 +1300,17 @@ export const QuizPage: React.FC = () => {
                 </button>
               </div>
 
-              {/* Quiz Settings */}
-              <div className="mb-8 p-6 bg-gray-50 rounded-lg">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Quiz Settings</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">
-                      Quiz Title *
-                    </label>
-                    <input
-                      type="text"
-                      value={createForm.title || selectedQuiz.title}
-                      onChange={(e) => setCreateForm({ ...createForm, title: e.target.value })}
-                      placeholder="Enter quiz title"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">
-                      Subject *
-                    </label>
-                    <input
-                      type="text"
-                      value={createForm.subject || selectedQuiz.subject}
-                      onChange={(e) => setCreateForm({ ...createForm, subject: e.target.value })}
-                      placeholder="e.g., Mathematics, History"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">
-                      Difficulty
-                    </label>
-                    <select
-                      value={createForm.difficulty || selectedQuiz.difficulty}
-                      onChange={(e) => setCreateForm({ ...createForm, difficulty: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                    >
-                      <option value="easy">Easy</option>
-                      <option value="medium">Medium</option>
-                      <option value="hard">Hard</option>
-                      <option value="veryhard">Very Hard</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">
-                      Time Limit (minutes)
-                    </label>
-                    <input
-                      type="number"
-                      value={createForm.timeLimit || (selectedQuiz.timeLimit ? Math.floor(selectedQuiz.timeLimit / 60) : 30)}
-                      onChange={(e) => setCreateForm({ ...createForm, timeLimit: parseInt(e.target.value) || 30 })}
-                      min="1"
-                      max="180"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-900 mb-2">
-                      Description (Optional)
-                    </label>
-                    <textarea
-                      value={createForm.description || selectedQuiz.description || ''}
-                      onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
-                      placeholder="Brief description of the quiz"
-                      rows={3}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                    />
-                  </div>
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id="isPublic"
-                      checked={createForm.isPublic ?? selectedQuiz.isPublic ?? true}
-                      onChange={(e) => setCreateForm({ ...createForm, isPublic: e.target.checked })}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                    <label htmlFor="isPublic" className="ml-2 block text-sm text-gray-900">
-                      Make quiz public (visible to other users)
-                    </label>
-                  </div>
-                </div>
+              {/* Subject input for editing quiz */}
+              <div className="mb-4">
+                <label className="block text-gray-700 font-semibold mb-2">Subject <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={createForm.subject}
+                  onChange={e => setCreateForm({ ...createForm, subject: e.target.value })}
+                  placeholder="e.g., Mathematics, History"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                  required
+                />
               </div>
 
               {/* Questions */}
@@ -1365,7 +1320,7 @@ export const QuizPage: React.FC = () => {
               <div className="flex gap-4">
                 <button
                   onClick={updateQuiz}
-                  disabled={loading}
+                  disabled={loading || !createForm.subject.trim() || questions.length === 0}
                   className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold rounded-lg hover:shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {loading ? (
@@ -1410,167 +1365,161 @@ export const QuizPage: React.FC = () => {
               <form onSubmit={generateQuiz} className="space-y-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-900 mb-2">
-                    Topic or Subject
+                    Subject <span className="text-red-500">*</span>
                   </label>
-                  <div className="flex gap-2 mb-6">
-                    <button
-                      type="button"
-                      onClick={() => setGenerateMode('topic')}
-                      className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all ${generateMode === 'topic'
-                        ? 'bg-blue-600 text-white shadow-lg'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                        }`}
-                    >
-                      Topic or File
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setGenerateMode('paste')}
-                      className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all ${generateMode === 'paste'
-                        ? 'bg-blue-600 text-white shadow-lg'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                        }`}
-                    >
-                      Paste Text
-                    </button>
-                  </div>
+                  <input
+                    type="text"
+                    value={formData.subject}
+                    onChange={e => setFormData({ ...formData, subject: e.target.value })}
+                    placeholder="e.g., Biology, History, Mathematics"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                    required
+                  />
+                </div>
+                <div className="flex gap-2 mb-6">
+                  <button
+                    type="button"
+                    onClick={() => setGenerateMode('topic')}
+                    className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all ${generateMode === 'topic'
+                      ? 'bg-blue-600 text-white shadow-lg'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                  >
+                    Topic or File
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGenerateMode('paste')}
+                    className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all ${generateMode === 'paste'
+                      ? 'bg-blue-600 text-white shadow-lg'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                  >
+                    Paste Text
+                  </button>
+                </div>
 
-                  {generateMode === 'topic' ? (
-                    <div className="space-y-6">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-900 mb-2">
-                          Topic or Subject
-                        </label>
-                        <input
-                          type="text"
-                          value={formData.topic}
-                          onChange={(e) => setFormData({ ...formData, topic: e.target.value })}
-                          placeholder="e.g., Photosynthesis, World War 2, Calculus"
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-900 mb-2">
-                          Subject Name (Optional)
-                        </label>
-                        <input
-                          type="text"
-                          value={formData.subject}
-                          onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                          placeholder="e.g., Biology, History, Mathematics"
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-900 mb-2">
-                          Upload File (PDF or DOCX)
-                        </label>
-                        <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:border-gray-400 transition-colors">
-                          <div className="space-y-1 text-center">
-                            <div className="flex text-sm text-gray-600">
-                              <label
-                                htmlFor="file-upload"
-                                className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500"
-                              >
-                                <span>Upload a file</span>
-                                <input
-                                  id="file-upload"
-                                  name="file-upload"
-                                  type="file"
-                                  accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                                  onChange={(e) => setUploadedFile(e.target.files?.[0] || null)}
-                                  className="sr-only"
-                                />
-                              </label>
-                              <p className="pl-1">or drag and drop</p>
-                            </div>
-                            <p className="text-xs text-gray-500">
-                              PDF or DOCX up to 10MB
-                            </p>
-                            {uploadedFile && (
-                              <p className="text-sm text-green-600 font-medium">
-                                Selected: {uploadedFile.name}
-                              </p>
-                            )}
+                {generateMode === 'topic' ? (
+                  <div className="space-y-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-900 mb-2">
+                        Topic
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.topic}
+                        onChange={(e) => setFormData({ ...formData, topic: e.target.value })}
+                        placeholder="e.g., Photosynthesis, World War 2, Calculus"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-900 mb-2">
+                        Upload File (PDF or DOCX)
+                      </label>
+                      <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:border-gray-400 transition-colors">
+                        <div className="space-y-1 text-center">
+                          <div className="flex text-sm text-gray-600">
+                            <label
+                              htmlFor="file-upload"
+                              className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500"
+                            >
+                              <span>Upload a file</span>
+                              <input
+                                id="file-upload"
+                                name="file-upload"
+                                type="file"
+                                accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                onChange={(e) => setUploadedFile(e.target.files?.[0] || null)}
+                                className="sr-only"
+                              />
+                            </label>
+                            <p className="pl-1">or drag and drop</p>
                           </div>
+                          <p className="text-xs text-gray-500">
+                            PDF or DOCX up to 10MB
+                          </p>
+                          {uploadedFile && (
+                            <p className="text-sm text-green-600 font-medium">
+                              Selected: {uploadedFile.name}
+                            </p>
+                          )}
                         </div>
                       </div>
                     </div>
-                  ) : (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-900 mb-2">
-                        Paste Your Text
-                      </label>
-                      <textarea
-                        value={pastedText}
-                        onChange={(e) => setPastedText(e.target.value)}
-                        placeholder="Paste your lecture notes, article, textbook content, or any material to generate questions..."
-                        rows={8}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 font-mono text-sm"
-                      />
-                      <p className="text-xs text-gray-500 mt-2">
-                        {pastedText.length} characters • Recommended: 500-5000 characters
-                      </p>
-                    </div>
-                  )}
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-2">
+                      Paste Your Text
+                    </label>
+                    <textarea
+                      value={pastedText}
+                      onChange={(e) => setPastedText(e.target.value)}
+                      placeholder="Paste your lecture notes, article, textbook content, or any material to generate questions..."
+                      rows={8}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 font-mono text-sm"
+                    />
+                    <p className="text-xs text-gray-500 mt-2">
+                      {pastedText.length} characters • Recommended: 500-5000 characters
+                    </p>
+                  </div>
+                )}
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-900 mb-2">
-                        Difficulty
-                      </label>
-                      <select
-                        value={formData.difficulty}
-                        onChange={(e) => setFormData({ ...formData, difficulty: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                      >
-                        <option value="easy">Easy</option>
-                        <option value="medium">Medium</option>
-                        <option value="hard">Hard</option>
-                        <option value="veryhard">Very Hard</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-900 mb-2">
-                        Number of Questions
-                      </label>
-                      <select
-                        value={formData.numQuestions}
-                        onChange={(e) => setFormData({ ...formData, numQuestions: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                      >
-                        <option value="5">5 Questions</option>
-                        <option value="10">10 Questions</option>
-                        <option value="15">15 Questions</option>
-                        <option value="20">20 Questions</option>
-                      </select>
-                    </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-2">
+                      Difficulty
+                    </label>
+                    <select
+                      value={formData.difficulty}
+                      onChange={(e) => setFormData({ ...formData, difficulty: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                    >
+                      <option value="easy">Easy</option>
+                      <option value="medium">Medium</option>
+                      <option value="hard">Hard</option>
+                      <option value="veryhard">Very Hard</option>
+                    </select>
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-900 mb-2">
-                      Time Limit (minutes)
+                      Number of Questions
                     </label>
-                    <input
-                      type="number"
-                      value={formData.timeLimit}
-                      onChange={(e) => setFormData({ ...formData, timeLimit: parseInt(e.target.value) || 30 })}
-                      min={1}
-                      max={180}
-                      placeholder="30"
+                    <select
+                      value={formData.numQuestions}
+                      onChange={(e) => setFormData({ ...formData, numQuestions: e.target.value })}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Set the time limit for completing this quiz (1-180 minutes)</p>
+                    >
+                      <option value="5">5 Questions</option>
+                      <option value="10">10 Questions</option>
+                      <option value="15">15 Questions</option>
+                      <option value="20">20 Questions</option>
+                    </select>
                   </div>
-                  {/* Close the form's field wrapper */}
                 </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">
+                    Time Limit (minutes)
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.timeLimit}
+                    onChange={(e) => setFormData({ ...formData, timeLimit: parseInt(e.target.value) || 30 })}
+                    min={1}
+                    max={180}
+                    placeholder="30"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Set the time limit for completing this quiz (1-180 minutes)</p>
+                </div>
+
 
                 <button
                   type="submit"
-                  disabled={loading || (generateMode === 'paste' ? !pastedText.trim() : !formData.topic.trim())}
+                  disabled={loading || !formData.subject.trim() || (generateMode === 'paste' ? !pastedText.trim() : !formData.topic.trim())}
                   className="w-full px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {loading ? (
@@ -1787,8 +1736,8 @@ export const QuizPage: React.FC = () => {
                                   {entry.subject}
                                 </span>
                                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${entry.difficulty === 'easy' ? 'bg-green-50 text-green-700' :
-                                    entry.difficulty === 'hard' || entry.difficulty === 'veryhard' ? 'bg-red-50 text-red-700' :
-                                      'bg-yellow-50 text-yellow-700'
+                                  entry.difficulty === 'hard' || entry.difficulty === 'veryhard' ? 'bg-red-50 text-red-700' :
+                                    'bg-yellow-50 text-yellow-700'
                                   }`}>
                                   {entry.difficulty}
                                 </span>
@@ -1800,8 +1749,8 @@ export const QuizPage: React.FC = () => {
                             <td className="px-6 py-4">
                               <div className="flex flex-col">
                                 <span className={`text-xl font-bold ${entry.percentage >= 80 ? 'text-green-600' :
-                                    entry.percentage >= 60 ? 'text-yellow-600' :
-                                      'text-red-600'
+                                  entry.percentage >= 60 ? 'text-yellow-600' :
+                                    'text-red-600'
                                   }`}>
                                   {entry.percentage.toFixed(0)}%
                                 </span>
@@ -2225,6 +2174,16 @@ export const QuizPage: React.FC = () => {
       </div>
 
 
+      {leaderboardQuizId && (
+        <LeaderboardModal
+          quizId={leaderboardQuizId}
+          quizTitle={leaderboardQuizTitle}
+          onClose={() => {
+            setLeaderboardQuizId(null);
+            setLeaderboardQuizTitle('');
+          }}
+        />
+      )}
     </div>
   );
 };

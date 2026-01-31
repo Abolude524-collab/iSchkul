@@ -121,8 +121,8 @@ function scoreMCQMultiple(question, userAnswers) {
 
 /**
  * Score TRUE_FALSE (toggle - boolean answer)
- * @param {Object} question - Question with correctAnswerBoolean (true or false)
- * @param {Boolean} userAnswer - User's boolean selection
+ * @param {Object} question - Question with correctAnswerBoolean (true or false) and options
+ * @param {Number|Boolean} userAnswer - User's selection (index or boolean)
  * @returns {Object} { isCorrect: boolean, userAnswer: boolean, explanation: string }
  */
 function scoreTrueFalse(question, userAnswer) {
@@ -136,19 +136,29 @@ function scoreTrueFalse(question, userAnswer) {
     };
   }
 
-  // Convert string to boolean if needed
-  let answer = userAnswer;
-  if (typeof userAnswer === 'string') {
-    answer = userAnswer.toLowerCase() === 'true' || userAnswer === '1';
+  let answerBool = userAnswer;
+
+  // If userAnswer is a number (index), map to boolean via options
+  if (typeof userAnswer === 'number' && question.options && Array.isArray(question.options)) {
+    const selectedOptionText = question.options[userAnswer];
+    if (selectedOptionText) {
+      const lowerText = selectedOptionText.toLowerCase();
+      if (lowerText === 'true') answerBool = true;
+      else if (lowerText === 'false') answerBool = false;
+    }
+  } else if (typeof userAnswer === 'string') {
+    // Convert string to boolean if needed
+    answerBool = userAnswer.toLowerCase() === 'true' || userAnswer === '1';
   } else if (typeof userAnswer !== 'boolean') {
-    answer = Boolean(userAnswer);
+    // Fallback
+    answerBool = Boolean(userAnswer);
   }
 
-  const isCorrect = answer === question.correctAnswerBoolean;
+  const isCorrect = answerBool === question.correctAnswerBoolean;
 
   return {
     isCorrect,
-    userAnswer: answer,
+    userAnswer: answerBool,
     correctAnswer: question.correctAnswerBoolean,
     explanation: question.explanation || '',
   };

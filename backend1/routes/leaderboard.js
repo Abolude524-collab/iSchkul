@@ -96,14 +96,14 @@ router.post('/end/:id', auth, async (req, res) => {
     }
 
     const leaderboardId = req.params.id;
-    
+
     if (!mongoose.Types.ObjectId.isValid(leaderboardId)) {
       return res.status(400).json({ error: 'Invalid leaderboard ID' });
     }
 
     const leaderboard = await Leaderboard.findByIdAndUpdate(
       leaderboardId,
-      { 
+      {
         status: 'ended',
         endedAt: new Date()
       },
@@ -129,6 +129,10 @@ router.post('/end/:id', auth, async (req, res) => {
 // Get active leaderboard (usually the weekly one) - MUST be BEFORE /:id
 router.get('/active', auth, async (req, res) => {
   try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
     // First try to find the active weekly leaderboard
     let activeLeaderboard = await Leaderboard.findOne({
       title: 'Weekly Leaderboard',
@@ -170,7 +174,7 @@ router.get('/active', auth, async (req, res) => {
     // For Weekly Leaderboard: Calculate XP for THIS WEEK only
     // For other leaderboards: Use total XP
     const isWeeklyLeaderboard = activeLeaderboard.title === 'Weekly Leaderboard';
-    
+
     let rankings;
     if (isWeeklyLeaderboard) {
       // Get XP earned THIS WEEK (current week in progress)
@@ -178,16 +182,16 @@ router.get('/active', auth, async (req, res) => {
       const now = new Date();
       const today = new Date(now);
       today.setHours(0, 0, 0, 0);
-      
+
       const diffToMonday = (today.getDay() + 6) % 7;
       const thisWeekMonday = new Date(today);
       thisWeekMonday.setDate(today.getDate() - diffToMonday);
       thisWeekMonday.setHours(0, 0, 0, 0);
-      
+
       const thisWeekSunday = new Date(thisWeekMonday);
       thisWeekSunday.setDate(thisWeekMonday.getDate() + 6);
       thisWeekSunday.setHours(23, 59, 59, 999);
-      
+
       // Get weekly XP for all users
       const weeklyXpData = await XpLog.aggregate([
         {
@@ -202,15 +206,15 @@ router.get('/active', auth, async (req, res) => {
           }
         }
       ]);
-      
+
       // Create map of userId -> weeklyXp
       const weeklyXpMap = new Map();
       weeklyXpData.forEach(item => {
         weeklyXpMap.set(item._id.toString(), item.weeklyXp);
       });
-      
+
       // Sort users by weekly XP
-      rankings = users
+      const allRankings = users
         .map(user => ({
           id: user._id.toString(),
           _id: user._id.toString(),
@@ -224,22 +228,48 @@ router.get('/active', auth, async (req, res) => {
           avatar: getAvatarUrl(user.avatar)
         }))
         .filter(user => user.weeklyXp > 0) // Only users with XP this week
-        .sort((a, b) => b.weeklyXp - a.weeklyXp)
-        .slice(0, 50)
+        .sort((a, b) => b.weeklyXp - a.weeklyXp);
+
+      // Paginate IN MEMORY (since we had to calculate weekly XP first)
+      const total = allRankings.length;
+      rankings = allRankings
+        .slice(skip, skip + limit)
         .map((user, index) => ({
           ...user,
-          rank: index + 1
+          rank: skip + index + 1
         }));
+
+      res.json({
+        leaderboard: {
+          _id: activeLeaderboard._id,
+          title: activeLeaderboard.title,
+          description: activeLeaderboard.description,
+          startDate: activeLeaderboard.startDate,
+          endDate: activeLeaderboard.endDate,
+          status: activeLeaderboard.status,
+          prizes: activeLeaderboard.prizes,
+          rankings,
+          pagination: {
+            current: page,
+            pages: Math.ceil(total / limit),
+            total,
+            perPage: limit
+          }
+        }
+      });
     } else {
       // Other leaderboards: use total XP
-      rankings = users
+      const allRankings = users
         .filter(user => user.xp > 0)
-        .sort((a, b) => b.xp - a.xp)
-        .slice(0, 50)
+        .sort((a, b) => b.xp - a.xp);
+
+      const total = allRankings.length;
+      rankings = allRankings
+        .slice(skip, skip + limit)
         .map((user, index) => ({
           id: user._id.toString(),
           _id: user._id.toString(),
-          rank: index + 1,
+          rank: skip + index + 1,
           name: user.name || user.username || 'Anonymous',
           username: user.username,
           institution: user.institution || '',
@@ -248,20 +278,26 @@ router.get('/active', auth, async (req, res) => {
           level: user.level || 0,
           avatar: getAvatarUrl(user.avatar)
         }));
-    }
 
-    res.json({
-      leaderboard: {
-        _id: activeLeaderboard._id,
-        title: activeLeaderboard.title,
-        description: activeLeaderboard.description,
-        startDate: activeLeaderboard.startDate,
-        endDate: activeLeaderboard.endDate,
-        status: activeLeaderboard.status,
-        prizes: activeLeaderboard.prizes,
-        rankings
-      }
-    });
+      res.json({
+        leaderboard: {
+          _id: activeLeaderboard._id,
+          title: activeLeaderboard.title,
+          description: activeLeaderboard.description,
+          startDate: activeLeaderboard.startDate,
+          endDate: activeLeaderboard.endDate,
+          status: activeLeaderboard.status,
+          prizes: activeLeaderboard.prizes,
+          rankings,
+          pagination: {
+            current: page,
+            pages: Math.ceil(total / limit),
+            total,
+            perPage: limit
+          }
+        }
+      });
+    }
   } catch (error) {
     console.error('Get active leaderboard error:', error);
     res.status(500).json({ error: 'Server error' });

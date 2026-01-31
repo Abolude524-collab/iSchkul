@@ -4,6 +4,7 @@ import { Footer } from '../components/Footer';
 import { Award, Target, Users, Lightbulb, Facebook, Linkedin } from 'lucide-react';
 import TestimonyImg from "../components/images/Testimony.jpg";
 import JeffreyImg from "../components/images/Jeffrey.jpg";
+import GodspowerImg from "../components/images/Godspower.jpg"; 
 
 export const AboutPage: React.FC = () => {
   const values = [
@@ -40,7 +41,7 @@ export const AboutPage: React.FC = () => {
     {
       name: "Edward Godspower",
       role: "Product Manager",
-      avatar: "https://randomuser.me/api/portraits/med/men/44.jpg",
+      avatar: GodspowerImg,
       bio: "Loves building scalable web apps.",
       social: {
         facebook: "https://www.facebook.com/profile.php?id=61571600835845",
@@ -206,7 +207,7 @@ export const AboutPage: React.FC = () => {
       {/* Innovation Highlights */}
       <section className="py-16 md:py-24 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-12 text-center">Why Choose ischkul?</h2>
+          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-12 text-center">Why Choose iSchkul?</h2>
           <div className="space-y-8">
             <div className="flex gap-6 items-start">
               <div className="flex-shrink-0">

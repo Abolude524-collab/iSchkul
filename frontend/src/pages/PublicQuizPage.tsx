@@ -8,8 +8,11 @@ interface Question {
   _id?: string;
   id?: string;
   text: string;
+  type: 'mcq_single' | 'mcq_multiple' | 'true_false';
   options: string[];
-  correctAnswer: number;
+  correctAnswer?: number;
+  correctAnswers?: number[];
+  correctAnswerBoolean?: boolean;
   explanation?: string;
   imageUrl?: string;
 }
@@ -31,24 +34,31 @@ interface Quiz {
   createdAt?: string;
 }
 
+import { GuestInfoModal } from '../components/GuestInfoModal';
+import { useAuthStore } from '../services/store';
+
 const PublicQuizPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuthStore();
+
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [answers, setAnswers] = useState<number[]>([]);
+  const [answers, setAnswers] = useState<any[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [showCalculator, setShowCalculator] = useState(false);
   const [calcDisplay, setCalcDisplay] = useState('0');
-  const [calcPreviousValue, setCalcPreviousValue] = useState<number | null>(null);
-  const [calcOperation, setCalcOperation] = useState<string | null>(null);
-  const [calcWaitingForOperand, setCalcWaitingForOperand] = useState(false);
   const [testStarted, setTestStarted] = useState(false);
+
+  // Guest info state
+  const [showGuestModal, setShowGuestModal] = useState(false);
+  const [guestName, setGuestName] = useState('');
+  const [guestEmail, setGuestEmail] = useState('');
 
   useEffect(() => {
     fetchQuiz();
@@ -96,23 +106,121 @@ const PublicQuizPage: React.FC = () => {
   };
 
   const handleAnswer = (answerIndex: number) => {
+    const currentQ = quiz?.questions[currentQuestion];
+    if (!currentQ) return;
+
     const newAnswers = [...answers];
-    newAnswers[currentQuestion] = answerIndex;
+    const currentAnswer = newAnswers[currentQuestion];
+
+    if (currentQ.type === 'mcq_multiple') {
+      // Initialize if null/undefined
+      const selected = Array.isArray(currentAnswer) ? [...currentAnswer] : [];
+
+      const index = selected.indexOf(answerIndex);
+      if (index === -1) {
+        selected.push(answerIndex);
+      } else {
+        selected.splice(index, 1);
+      }
+      // Sort for consistent comparison but order doesn't strictly matter for storage
+      newAnswers[currentQuestion] = selected.sort((a, b) => a - b);
+    } else {
+      // Single choice and True/False (treated as single selection of options)
+      newAnswers[currentQuestion] = answerIndex;
+    }
+
     setAnswers(newAnswers);
   };
 
   const submitQuiz = async () => {
     if (!quiz) return;
 
+    // Calculate score locally first for immediate feedback
     let correctCount = 0;
     answers.forEach((answer, index) => {
-      if (answer === quiz.questions[index].correctAnswer) {
-        correctCount++;
+      const question = quiz.questions[index];
+
+      if (question.type === 'mcq_multiple') {
+        const correct = question.correctAnswers || [];
+        if (Array.isArray(answer) &&
+          answer.length === correct.length &&
+          answer.every((val: number) => correct.includes(val))) {
+          correctCount++;
+        }
+      } else if (question.type === 'true_false') {
+        if (question.correctAnswer !== undefined) {
+          if (answer === question.correctAnswer) correctCount++;
+        } else if (question.correctAnswerBoolean !== undefined) {
+          // Map boolean to index based on option text
+          // Assume options contain "True" and "False"
+          // normalize options to lower case for check
+          const trueIndex = question.options.findIndex(opt => opt.toLowerCase() === 'true');
+          const falseIndex = question.options.findIndex(opt => opt.toLowerCase() === 'false');
+
+          if (question.correctAnswerBoolean === true && answer === trueIndex) correctCount++;
+          if (question.correctAnswerBoolean === false && answer === falseIndex) correctCount++;
+        }
+      } else {
+        // mcq_single
+        if (answer === question.correctAnswer) {
+          correctCount++;
+        }
       }
     });
 
-    setScore(correctCount);
-    setSubmitted(true);
+    try {
+      setLoading(true);
+
+      const timeSpent = startTime ? Math.floor((new Date().getTime() - startTime.getTime()) / 1000) : 0;
+
+      // Prepare payload
+      const payload: any = {
+        answers,
+        timeSpent,
+      };
+
+      // Add guest details if not logged in
+      if (!user) {
+        payload.guestName = guestName;
+        payload.guestEmail = guestEmail;
+      }
+
+      // Choose endpoint based on auth status
+      // If user is logged in, use standard submit. If guest, use public submit.
+      const endpoint = user
+        ? `/quizzes/${id}/submit`
+        : `/quizzes/public/${id}/submit`;
+
+      const headers: any = {
+        'Content-Type': 'application/json'
+      };
+
+      const token = localStorage.getItem('authToken');
+      if (token && user) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(getAPIEndpoint(endpoint), {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to submit quiz');
+      }
+
+      const data = await response.json();
+
+      // Update local state with server results
+      setScore(data.result.score);
+      setSubmitted(true);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to submit quiz. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const calculatePercentage = () => {
@@ -120,15 +228,26 @@ const PublicQuizPage: React.FC = () => {
     return Math.round((score / quiz.questions.length) * 100);
   };
 
-  const getGrade = (percentage: number) => {
-    if (percentage >= 90) return { grade: 'A', color: 'text-green-600' };
-    if (percentage >= 80) return { grade: 'B', color: 'text-blue-600' };
-    if (percentage >= 70) return { grade: 'C', color: 'text-yellow-600' };
-    if (percentage >= 60) return { grade: 'D', color: 'text-orange-600' };
-    return { grade: 'F', color: 'text-red-600' };
+  const startTest = () => {
+    // If not logged in and no guest info, show modal
+    if (!user && !guestName) {
+      setShowGuestModal(true);
+      return;
+    }
+
+    setTestStarted(true);
+    setTimeRemaining(quiz?.timeLimit || 1800);
+    setStartTime(new Date());
+    setAnswers(new Array(quiz?.questions.length || 0).fill(-1));
+    setCurrentQuestion(0);
   };
 
-  const startTest = () => {
+  const handleGuestInfoSubmit = (name: string, email: string) => {
+    setGuestName(name);
+    setGuestEmail(email);
+    setShowGuestModal(false);
+
+    // Auto start test after entering details
     setTestStarted(true);
     setTimeRemaining(quiz?.timeLimit || 1800);
     setStartTime(new Date());
@@ -143,7 +262,6 @@ const PublicQuizPage: React.FC = () => {
         <div className="flex items-center justify-center min-h-[60vh]">
           <Loader className="animate-spin h-8 w-8 text-blue-600" />
         </div>
-        <Footer />
       </div>
     );
   }
@@ -163,7 +281,6 @@ const PublicQuizPage: React.FC = () => {
             Go Home
           </button>
         </div>
-        <Footer />
       </div>
     );
   }
@@ -174,7 +291,7 @@ const PublicQuizPage: React.FC = () => {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navbar />
-        <div className="max-w-3xl mx-auto py-12 px-4">
+        <div className="max-w-5xl mx-auto py-12 px-4">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
             <div className="mb-8">
               <h1 className="text-3xl font-bold text-gray-900 mb-2">{quiz.title}</h1>
@@ -236,14 +353,20 @@ const PublicQuizPage: React.FC = () => {
             </button>
           </div>
         </div>
-        <Footer />
+
+        {showGuestModal && (
+          <GuestInfoModal
+            onSubmit={handleGuestInfoSubmit}
+            onCancel={() => setShowGuestModal(false)}
+          />
+        )}
       </div>
     );
   }
 
   if (submitted) {
     const percentage = calculatePercentage();
-    const { grade, color } = getGrade(percentage);
+    // removed getGrade call to remove grade entirely
 
     return (
       <div className="min-h-screen bg-gray-50">
@@ -256,14 +379,10 @@ const PublicQuizPage: React.FC = () => {
               <p className="text-gray-600">Here are your results</p>
             </div>
 
-            <div className="grid grid-cols-2 gap-6 mb-8">
+            <div className="grid grid-cols-1 gap-6 mb-8">
               <div className="text-center p-6 bg-blue-50 rounded-lg">
                 <div className="text-3xl font-bold text-blue-600 mb-1">{score}</div>
                 <div className="text-sm text-blue-700">Correct Answers</div>
-              </div>
-              <div className="text-center p-6 bg-green-50 rounded-lg">
-                <div className={`text-3xl font-bold mb-1 ${color}`}>{grade}</div>
-                <div className="text-sm text-green-700">Grade</div>
               </div>
             </div>
 
@@ -283,31 +402,66 @@ const PublicQuizPage: React.FC = () => {
             <div className="space-y-4 mb-8">
               {quiz.questions.map((question, index) => {
                 const userAnswer = answers[index];
-                const isCorrect = userAnswer === question.correctAnswer;
+                const isMultiple = question.type === 'mcq_multiple';
+
+                // Normalize correct answers for comparison
+                let correctIndices: number[] = [];
+                if (isMultiple) {
+                  correctIndices = question.correctAnswers || [];
+                } else if (question.type === 'true_false') {
+                  // Calculate correct index for T/F result view
+                  if (question.correctAnswer !== undefined) {
+                    correctIndices = [question.correctAnswer];
+                  } else if (question.correctAnswerBoolean !== undefined) {
+                    const trueIndex = question.options.findIndex(opt => opt.toLowerCase() === 'true');
+                    const falseIndex = question.options.findIndex(opt => opt.toLowerCase() === 'false');
+
+                    if (question.correctAnswerBoolean === true && trueIndex !== -1) correctIndices = [trueIndex];
+                    if (question.correctAnswerBoolean === false && falseIndex !== -1) correctIndices = [falseIndex];
+                  }
+                } else {
+                  // Single
+                  if (question.correctAnswer !== undefined) {
+                    correctIndices = [question.correctAnswer];
+                  }
+                }
+
+                // Normalize user answers
+                const userIndices = isMultiple
+                  ? (Array.isArray(userAnswer) ? userAnswer : [])
+                  : (userAnswer !== -1 ? [userAnswer] : []);
+
+                // Check correctness
+                // const isCorrect = ... (calculated via style below)
+
                 return (
                   <div key={index} className="border rounded-lg p-4">
                     <h4 className="font-medium mb-2">{index + 1}. {question.text}</h4>
                     <div className="space-y-1">
-                      {question.options.map((option, optionIndex) => (
-                        <div
-                          key={optionIndex}
-                          className={`p-2 rounded text-sm ${
-                            optionIndex === question.correctAnswer
+                      {question.options.map((option, optionIndex) => {
+                        const isSelected = userIndices.includes(optionIndex);
+                        const isOptionCorrect = correctIndices.includes(optionIndex);
+
+                        return (
+                          <div
+                            key={optionIndex}
+                            className={`p-2 rounded text-sm ${isOptionCorrect
                               ? 'bg-green-100 text-green-800'
-                              : optionIndex === userAnswer && !isCorrect
-                              ? 'bg-red-100 text-red-800'
-                              : 'bg-gray-50'
-                          }`}
-                        >
-                          {option}
-                          {optionIndex === question.correctAnswer && (
-                            <span className="ml-2 text-green-600">✓ Correct</span>
-                          )}
-                          {optionIndex === userAnswer && !isCorrect && (
-                            <span className="ml-2 text-red-600">✗ Your answer</span>
-                          )}
-                        </div>
-                      ))}
+                              : isSelected && !isOptionCorrect
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-gray-50'
+                              }`}
+                          >
+                            {option}
+                            {isOptionCorrect && (
+                              <span className="ml-2 text-green-600">✓ Correct</span>
+                            )}
+                            {isSelected && !isOptionCorrect && (
+                              <span className="ml-2 text-red-600">✗ Your answer</span>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                     {question.explanation && (
                       <div className="mt-3 p-3 bg-blue-50 rounded text-sm text-blue-800">
@@ -335,7 +489,6 @@ const PublicQuizPage: React.FC = () => {
             </div>
           </div>
         </div>
-        <Footer />
       </div>
     );
   }
@@ -343,7 +496,7 @@ const PublicQuizPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
-      <div className="max-w-3xl mx-auto py-8 px-4">
+      <div className="max-w-5xl mx-auto py-8 px-4">
         <div className="mb-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-bold text-gray-900">{quiz.title}</h2>
@@ -372,35 +525,57 @@ const PublicQuizPage: React.FC = () => {
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-          <h3 className="text-xl font-semibold text-gray-900 mb-6">
-            {quiz.questions[currentQuestion].text}
-          </h3>
+          <div className="mb-6">
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+              {quiz.questions[currentQuestion].text}
+            </h3>
+            {quiz.questions[currentQuestion].type === 'mcq_multiple' && (
+              <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg w-fit">
+                <CheckCircle size={14} />
+                <span>Select all correct answers</span>
+              </div>
+            )}
+          </div>
 
           <div className="space-y-3 mb-8">
-            {quiz.questions[currentQuestion].options.map((option, index) => (
-              <button
-                key={index}
-                onClick={() => handleAnswer(index)}
-                className={`w-full p-4 text-left rounded-lg border-2 transition-all ${
-                  answers[currentQuestion] === index
+            {quiz.questions[currentQuestion].options.map((option, index) => {
+              const question = quiz.questions[currentQuestion];
+              const isMultiple = question.type === 'mcq_multiple';
+              const currentAnswer = answers[currentQuestion];
+
+              const isSelected = isMultiple
+                ? Array.isArray(currentAnswer) && currentAnswer.includes(index)
+                : currentAnswer === index;
+
+              return (
+                <button
+                  key={index}
+                  onClick={() => handleAnswer(index)}
+                  className={`w-full p-4 text-left rounded-lg border-2 transition-all ${isSelected
                     ? 'border-blue-500 bg-blue-50'
                     : 'border-gray-300 hover:border-gray-400 bg-white'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                      answers[currentQuestion] === index
+                    }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`w-6 h-6 flex items-center justify-center border-2 ${isSelected
                         ? 'border-blue-500 bg-blue-500'
                         : 'border-gray-300'
-                    }`}
-                  >
-                    {answers[currentQuestion] === index && <div className="w-2 h-2 bg-white rounded-full"></div>}
+                        } ${isMultiple ? 'rounded-md' : 'rounded-full'}`}
+                    >
+                      {isSelected && (
+                        isMultiple ? (
+                          <CheckCircle size={14} className="text-white" />
+                        ) : (
+                          <div className="w-2 h-2 bg-white rounded-full" />
+                        )
+                      )}
+                    </div>
+                    <span className="text-gray-900">{option}</span>
                   </div>
-                  <span className="text-gray-900">{option}</span>
-                </div>
-              </button>
-            ))}
+                </button>
+              );
+            })}
           </div>
 
           <div className="flex gap-4">
@@ -470,7 +645,13 @@ const PublicQuizPage: React.FC = () => {
           </div>
         )}
       </div>
-  
+
+      {showGuestModal && (
+        <GuestInfoModal
+          onSubmit={handleGuestInfoSubmit}
+          onCancel={() => setShowGuestModal(false)}
+        />
+      )}
     </div>
   );
 };

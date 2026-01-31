@@ -40,6 +40,9 @@ function removeBoilerplateSections(text) {
 
     // References/Bibliography/Index at end
     /\n(?:references?|bibliography|index|appendix|appendices)\s*\n[^\n]*(?:\n[^\n]*)*$/gim,
+
+    // Course Information/Syllabus
+    /^(?:course\s+(?:inf|desc|out)|syllabus|prescribed\s+text|textbooks?)(?:\n[^\n]*){0,20}(?=\n\n|introduction|chapter)/gim,
   ];
 
   let cleaned = text;
@@ -115,10 +118,10 @@ function filterContentForQuizGeneration(text) {
   }
 
   const original = text;
-  
+
   // Step 1: Remove boilerplate
   const cleaned = removeBoilerplateSections(text);
-  
+
   // Step 2: Extract main content
   const extracted = extractMainContent(cleaned);
 

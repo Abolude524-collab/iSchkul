@@ -9,7 +9,16 @@ const quizResultSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true,
+    required: false, // Optional for guest users
+  },
+  guestName: {
+    type: String,
+    trim: true,
+  },
+  guestEmail: {
+    type: String,
+    trim: true,
+    lowercase: true,
   },
   // Store raw submitted answers; can be numbers, arrays (for multi-select), or booleans
   answers: [{

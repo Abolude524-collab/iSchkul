@@ -48,11 +48,11 @@ apiClient.interceptors.response.use(
       const ttl = getTTLForEndpoint(response.config.method, response.config.url || '');
       requestLimiter.setCache(cacheKey, response.data, ttl);
     }
-    
+
     // Reset retry attempts on success
     const cacheKey = getCacheKey(response.config.method || 'GET', response.config.url || '');
     requestAttempts.delete(cacheKey);
-    
+
     return response;
   },
   async (error) => {
@@ -65,7 +65,7 @@ apiClient.interceptors.response.use(
     if (status === 429) {
       const retryAfter = error.response?.headers['retry-after'];
       const retryAfterSeconds = retryAfter ? parseInt(retryAfter) : 60;
-      
+
       console.error(`[429 Rate Limited] ${config.url} - Retry after ${retryAfterSeconds}s`);
       requestLimiter.handleRateLimit(cacheKey, retryAfterSeconds);
 
@@ -76,9 +76,9 @@ apiClient.interceptors.response.use(
       if (attempts < maxRetries) {
         requestAttempts.set(cacheKey, attempts + 1);
         const delay = getExponentialBackoffDelay(attempts);
-        
+
         console.log(`[Retry] Attempt ${attempts + 1}/${maxRetries} in ${delay}ms`);
-        
+
         return new Promise((resolve, reject) => {
           setTimeout(() => {
             apiClient.request(config)
@@ -101,6 +101,9 @@ apiClient.interceptors.response.use(
       }
 
       // Token is invalid or expired, clear auth data and redirect to login
+      if (window.location.pathname !== '/login') {
+        alert('Your session has expired. Please log in again.');
+      }
       localStorage.removeItem('authToken')
       localStorage.removeItem('user')
       useAuthStore.getState().setUser(null)
@@ -196,8 +199,8 @@ export const personalChatAPI = {
 
 // Utility to wrap GET requests with caching and deduplication
 async function cachedGet(url: string, config?: any) {
-  const cacheKey = getCacheKey('GET', url);
-  
+  const cacheKey = getCacheKey('GET', url, undefined, config?.params);
+
   // Check cache first
   const cached = requestLimiter.getFromCache(cacheKey);
   if (cached) {
@@ -213,7 +216,7 @@ async function cachedGet(url: string, config?: any) {
   // Make new request
   const request = apiClient.get(url, config);
   requestLimiter.setPendingRequest(cacheKey, request);
-  
+
   return request;
 }
 
@@ -233,8 +236,8 @@ export const gamificationAPI = {
     cachedGet('/gamification/activity'),
   userEnter: () =>
     apiClient.post('/gamification/enter'),
-  getLeaderboard: () =>
-    cachedGet('/gamification/leaderboard'),
+  getLeaderboard: (page: number = 1, limit: number = 10) =>
+    cachedGet('/gamification/leaderboard', { params: { page, limit } }),
   getXpHistory: (limit: number = 50) =>
     cachedGet('/gamification/history', { params: { limit } }),
   getUserActivity: () =>
@@ -259,8 +262,8 @@ export const leaderboardAPI = {
     apiClient.post('/leaderboard/create', data),
   listLeaderboards: () =>
     cachedGet('/leaderboard/list'),
-  getActiveLeaderboard: () =>
-    cachedGet('/leaderboard/active'),
+  getActiveLeaderboard: (page: number = 1, limit: number = 10) =>
+    cachedGet('/leaderboard/active', { params: { page, limit } }),
   joinLeaderboard: (leaderboardId: string) =>
     apiClient.post('/leaderboard/join', { leaderboardId }),
   leaveLeaderboard: (leaderboardId: string) =>

@@ -37,33 +37,61 @@ export const LeaderboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // State for pagination
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({
+    total: 0,
+    pages: 1,
+    perPage: 10
+  });
+
   useEffect(() => {
     if (!user) {
       navigate('/login');
       return;
     }
     loadData();
-  }, [user, navigate]);
+  }, [user, navigate, activeTab, page]);
+
+  // Reset page when switching tabs
+  const handleTabChange = (tab: 'all-time' | 'weekly') => {
+    setActiveTab(tab);
+    setPage(1);
+  };
 
   const loadData = async () => {
     try {
       setLoading(true);
 
-      // Load all-time leaderboard
-      const leaderboardRes = await gamificationAPI.getLeaderboard();
-      setLeaderboard(leaderboardRes.data.leaderboard);
+      if (activeTab === 'all-time') {
+        // Load all-time leaderboard
+        const leaderboardRes = await gamificationAPI.getLeaderboard(page, 10);
 
-      // Find user's rank in all-time leaderboard
-      const userEntry = leaderboardRes.data.leaderboard.find((entry: LeaderboardEntry) => entry.id === user?.id);
-      setUserRank(userEntry || null);
+        if (leaderboardRes.data.pagination) {
+          setLeaderboard(leaderboardRes.data.leaderboard);
+          setPagination(leaderboardRes.data.pagination);
+        } else {
+          // Fallback
+          setLeaderboard(leaderboardRes.data.leaderboard);
+        }
 
-      // Load weekly leaderboard (Global Competition)
-      const weeklyRes = await leaderboardAPI.getActiveLeaderboard();
-      if (weeklyRes.data.leaderboard) {
-        setWeeklyLeaderboard(weeklyRes.data.leaderboard);
-        // Check if user is participating
-        if (weeklyRes.data.leaderboard.rankings) {
-          setIsParticipating(weeklyRes.data.leaderboard.rankings.some((r: LeaderboardEntry) => r.id === user?.id));
+        // Find user's rank (requires separate call if not in current page, but for now relies on what's returned or profile stats)
+        // Ideally we have a separate endpoint for "my rank", but we'll leave userRank as is if available
+        const userEntry = leaderboardRes.data.leaderboard.find((entry: LeaderboardEntry) => entry.id === user?.id);
+        if (userEntry) setUserRank(userEntry);
+
+      } else {
+        // Load weekly leaderboard
+        const weeklyRes = await leaderboardAPI.getActiveLeaderboard(page, 10);
+
+        if (weeklyRes.data.leaderboard) {
+          setWeeklyLeaderboard(weeklyRes.data.leaderboard);
+          setPagination(weeklyRes.data.leaderboard.pagination || { total: 0, pages: 1, perPage: 10 });
+
+          // Check if user is participating
+          if (weeklyRes.data.leaderboard.rankings) {
+            setIsParticipating(weeklyRes.data.leaderboard.rankings.some((r: LeaderboardEntry) => r.id === user?.id));
+          }
         }
       }
 
@@ -96,6 +124,18 @@ export const LeaderboardPage: React.FC = () => {
     }
   };
 
+  const handlePrevPage = () => {
+    if (page > 1) setPage(p => p - 1);
+  };
+
+  const handleNextPage = () => {
+    if (page < pagination.pages) setPage(p => p + 1);
+  };
+
+  const startIdx = (page - 1) * pagination.perPage + 1;
+  const endIdx = Math.min(startIdx + pagination.perPage - 1, pagination.total);
+
+
   const getRankIcon = (rank: number) => {
     switch (rank) {
       case 1:
@@ -122,7 +162,8 @@ export const LeaderboardPage: React.FC = () => {
     }
   };
 
-  if (loading) {
+  if (loading && page === 1 && leaderboard.length === 0 && !weeklyLeaderboard) {
+    // Only show full loader on initial load
     return (
       <div className="min-h-screen flex flex-col bg-gray-50">
         <Navbar />
@@ -157,22 +198,20 @@ export const LeaderboardPage: React.FC = () => {
         {/* Tab Navigation */}
         <div className="flex gap-1 mb-4 sm:mb-6">
           <button
-            onClick={() => setActiveTab('weekly')}
-            className={`flex-1 sm:flex-none px-4 sm:px-6 py-2 sm:py-3 rounded-lg text-sm sm:text-base font-semibold transition-colors ${
-              activeTab === 'weekly'
+            onClick={() => handleTabChange('weekly')}
+            className={`flex-1 sm:flex-none px-4 sm:px-6 py-2 sm:py-3 rounded-lg text-sm sm:text-base font-semibold transition-colors ${activeTab === 'weekly'
                 ? 'bg-blue-600 text-white'
                 : 'bg-white text-gray-600 hover:bg-gray-100'
-            }`}
+              }`}
           >
             Global Weekly Competition
           </button>
           <button
-            onClick={() => setActiveTab('all-time')}
-            className={`flex-1 sm:flex-none px-4 sm:px-6 py-2 sm:py-3 rounded-lg text-sm sm:text-base font-semibold transition-colors ${
-              activeTab === 'all-time'
+            onClick={() => handleTabChange('all-time')}
+            className={`flex-1 sm:flex-none px-4 sm:px-6 py-2 sm:py-3 rounded-lg text-sm sm:text-base font-semibold transition-colors ${activeTab === 'all-time'
                 ? 'bg-blue-600 text-white'
                 : 'bg-white text-gray-600 hover:bg-gray-100'
-            }`}
+              }`}
           >
             All-Time Rankings
           </button>
@@ -195,7 +234,7 @@ export const LeaderboardPage: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-1">
                     <Users size={16} className="sm:w-4 sm:h-4" />
-                    <span>{weeklyLeaderboard.rankings?.length || 0} participants</span>
+                    <span>{pagination.total} participants</span>
                   </div>
                 </div>
 
@@ -241,7 +280,7 @@ export const LeaderboardPage: React.FC = () => {
               </div>
             </div>
             <div className="divide-y divide-gray-200">
-              {leaderboard.slice(0, 20).map((entry, idx) => (
+              {leaderboard.map((entry, idx) => (
                 <div key={`alltime-${entry.id}-${idx}`} className={`p-3 sm:p-4 flex items-center gap-2 sm:gap-4 ${entry.id === user?.id ? 'bg-blue-50' : ''}`}>
                   <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ${getRankBadgeColor(entry.rank)}`}>
                     {getRankIcon(entry.rank)}
@@ -298,6 +337,37 @@ export const LeaderboardPage: React.FC = () => {
                 })}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Pagination Controls - Shared for both tabs */}
+        {pagination.total > 0 && (
+          <div className="p-4 bg-white border border-gray-200 border-t-0 rounded-b-xl flex justify-between items-center mt-0">
+            <div className="text-sm text-gray-600">
+              Showing <span className="font-medium">{startIdx}</span> to <span className="font-medium">{endIdx}</span> of <span className="font-medium">{pagination.total}</span> entries
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handlePrevPage}
+                disabled={page === 1}
+                className={`px-3 py-1 text-sm rounded-md border ${page === 1
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+              >
+                Previous
+              </button>
+              <button
+                onClick={handleNextPage}
+                disabled={page === pagination.pages}
+                className={`px-3 py-1 text-sm rounded-md border ${page === pagination.pages
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+              >
+                Next
+              </button>
+            </div>
           </div>
         )}
       </div>

@@ -1,11 +1,7 @@
 const mongoose = require('mongoose');
 
 const quizSchema = new mongoose.Schema({
-  title: {
-    type: String,
-    required: true,
-    trim: true,
-  },
+  // Removed title, use subject as main identifier
   subject: {
     type: String,
     required: true,

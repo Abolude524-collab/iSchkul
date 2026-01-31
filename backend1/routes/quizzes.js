@@ -12,10 +12,10 @@ const router = express.Router();
 // Create a new quiz
 router.post('/create', auth, async (req, res) => {
   try {
-    const { title, subject, questions, timeLimit, difficulty, isPublic = true } = req.body;
+    const { subject, questions, timeLimit, difficulty, isPublic = true } = req.body;
 
-    if (!title || !questions || !Array.isArray(questions) || questions.length === 0) {
-      return res.status(400).json({ error: 'Title and questions are required' });
+    if (!subject || !questions || !Array.isArray(questions) || questions.length === 0) {
+      return res.status(400).json({ error: 'Subject and questions are required' });
     }
 
     // Create questions first (mapping ensures all fields are preserved)
@@ -35,8 +35,7 @@ router.post('/create', auth, async (req, res) => {
 
     // Create quiz
     const quiz = new Quiz({
-      title,
-      subject: subject || 'General',
+      subject,
       questions: questionDocs.map(q => q._id),
       timeLimit: timeLimit || 1800, // 30 minutes default
       difficulty: difficulty || 'medium',
@@ -49,10 +48,10 @@ router.post('/create', auth, async (req, res) => {
 
     // Award XP for quiz creation (based on number of questions)
     const xpAmount = Math.min(Math.floor(questions.length * 2), 50); // 2 XP per question, max 50
-    
+
     try {
       console.log('[createQuiz] Awarding XP:', xpAmount, 'for', questions.length, 'questions');
-      
+
       // Create XP log entry
       await XpLog.create({
         user_id: req.user._id,
@@ -60,7 +59,7 @@ router.post('/create', auth, async (req, res) => {
         activity_type: 'QUIZ_CREATED',
         metadata: {
           quizId: quiz._id.toString(),
-          quizTitle: quiz.title,
+          quizSubject: quiz.subject,
           questionCount: questions.length,
           description: `Created quiz with ${questions.length} questions`
         }
@@ -72,7 +71,7 @@ router.post('/create', auth, async (req, res) => {
         { $inc: { xp: xpAmount, total_xp: xpAmount } },
         { new: true }
       );
-      
+
       console.log('[createQuiz] XP awarded. User XP now:', updatedUser.xp, 'Total XP:', updatedUser.total_xp);
     } catch (xpError) {
       console.error('[createQuiz] XP award error:', xpError.message);
@@ -83,10 +82,10 @@ router.post('/create', auth, async (req, res) => {
     await quiz.populate('questions');
     await quiz.populate('createdBy', 'name username');
 
-    res.status(201).json({ 
+    res.status(201).json({
       quiz,
       xpAwarded: xpAmount,
-      message: `Quiz created! You earned ${xpAmount} XP` 
+      message: `Quiz created! You earned ${xpAmount} XP`
     });
   } catch (error) {
     console.error('Create quiz error:', error);
@@ -114,12 +113,32 @@ router.get('/', auth, async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
       .skip(parseInt(offset))
+      .skip(parseInt(offset))
       .lean();
+
+    // Calculate stats for each quiz
+    const quizzesWithStats = await Promise.all(quizzes.map(async (quiz) => {
+      const results = await QuizResult.find({
+        quizId: quiz._id,
+        userId: req.user._id
+      }).select('percentage');
+
+      const totalAttempts = results.length;
+      const averageScore = totalAttempts > 0
+        ? results.reduce((acc, curr) => acc + (curr.percentage || 0), 0) / totalAttempts
+        : 0;
+
+      return {
+        ...quiz,
+        totalAttempts,
+        averageScore
+      };
+    }));
 
     const total = await Quiz.countDocuments(query);
 
     res.json({
-      quizzes,
+      quizzes: quizzesWithStats,
       total,
       hasMore: parseInt(offset) + quizzes.length < total
     });
@@ -177,6 +196,76 @@ router.get('/public/:id', async (req, res) => {
   }
 });
 
+// Public quiz submission route (No auth required)
+router.post('/public/:id/submit', async (req, res) => {
+  try {
+    const { answers, timeSpent, guestName, guestEmail } = req.body;
+
+    console.log('[publicSubmit] Starting submission for quiz:', req.params.id);
+    console.log('[publicSubmit] Guest:', guestName, guestEmail);
+
+    const quiz = await Quiz.findById(req.params.id).populate('questions');
+    if (!quiz) {
+      return res.status(404).json({ error: 'Quiz not found' });
+    }
+
+    if (!quiz.isPublic) {
+      return res.status(403).json({ error: 'This quiz is private' });
+    }
+
+    // Validate answers array
+    if (!answers || !Array.isArray(answers)) {
+      return res.status(400).json({ error: 'Answers must be an array' });
+    }
+
+    if (answers.length !== quiz.questions.length) {
+      return res.status(400).json({ error: 'Answer count does not match question count' });
+    }
+
+    // Use type-aware scoring engine
+    let scoringResult;
+    try {
+      scoringResult = scoreQuiz(quiz.questions, answers);
+    } catch (scoringError) {
+      console.error('[publicSubmit] Scoring error:', scoringError.message);
+      return res.status(400).json({ error: 'Error scoring quiz: ' + scoringError.message });
+    }
+
+    const { score, percentage, detailedResults } = scoringResult;
+
+    // Save result with guest info
+    const result = new QuizResult({
+      quizId: quiz._id,
+      // userId is optional for guests
+      guestName: guestName || 'Anonymous Guest',
+      guestEmail: guestEmail || '',
+      answers,
+      score,
+      percentage,
+      timeSpent: timeSpent || 0,
+      completedAt: new Date(),
+      detailedResults,
+    });
+
+    await result.save();
+    console.log('[publicSubmit] Guest result saved:', result._id);
+
+    res.json({
+      result: {
+        score,
+        totalQuestions: quiz.questions.length,
+        percentage,
+        timeSpent: timeSpent || 0,
+        detailedResults,
+        passed: percentage >= 60,
+      }
+    });
+  } catch (error) {
+    console.error('[publicSubmit] Error:', error);
+    res.status(500).json({ error: 'Failed to submit quiz', details: error.message });
+  }
+});
+
 // Update quiz
 router.put('/:id', auth, async (req, res) => {
   try {
@@ -190,9 +279,8 @@ router.put('/:id', auth, async (req, res) => {
       return res.status(403).json({ error: 'Only creator can update quiz' });
     }
 
-    const { title, subject, questions, timeLimit, difficulty, isPublic } = req.body;
+    const { subject, questions, timeLimit, difficulty, isPublic } = req.body;
 
-    if (title) quiz.title = title;
     if (subject) quiz.subject = subject;
     if (timeLimit !== undefined) quiz.timeLimit = timeLimit;
     if (difficulty) quiz.difficulty = difficulty;
@@ -261,7 +349,7 @@ router.delete('/:id', auth, async (req, res) => {
 router.post('/attempts', auth, async (req, res) => {
   try {
     const { quizId, answers, score, timeSpent, completedAt } = req.body;
-    
+
     // Validate inputs
     if (!quizId || !answers) {
       return res.status(400).json({ error: 'Quiz ID and answers are required' });
@@ -288,7 +376,7 @@ router.post('/attempts', auth, async (req, res) => {
     // Award XP
     const percentage = score || 0;
     const xpAmount = percentage >= 80 ? 20 : percentage >= 60 ? 15 : 10;
-    
+
     const quizTitle = quiz ? quiz.title : 'Synced Quiz';
 
     // Create XP log entry
@@ -303,11 +391,11 @@ router.post('/attempts', auth, async (req, res) => {
         description: `Offline quiz synced (${percentage}%)`
       }
     });
-    
+
     // Update user XP
     // Unified XP Awarding (Update both xp and total_xp)
-    await User.findByIdAndUpdate(req.user._id, { 
-      $inc: { xp: xpAmount, total_xp: xpAmount } 
+    await User.findByIdAndUpdate(req.user._id, {
+      $inc: { xp: xpAmount, total_xp: xpAmount }
     });
 
     res.status(201).json({ success: true, resultId: result._id });
@@ -380,7 +468,7 @@ router.post('/:id/submit', auth, async (req, res) => {
     try {
       const xpAmount = percentage >= 80 ? 20 : percentage >= 60 ? 15 : 10;
       console.log('[submitQuiz] Awarding XP:', xpAmount);
-      
+
       // Method 1: Try using app.locals.awardXp if available
       if (req.app && req.app.locals && typeof req.app.locals.awardXp === 'function') {
         const xpResult = await req.app.locals.awardXp(String(req.user._id), 'QUIZ_COMPLETE', xpAmount, {
@@ -393,7 +481,7 @@ router.post('/:id/submit', auth, async (req, res) => {
       } else {
         // Method 2: Fallback - direct update to User and create XP log
         console.log('[submitQuiz] Using fallback XP award method');
-        
+
         // Create XP log entry with correct schema field names
         const xpLog = await XpLog.create({
           user_id: req.user._id,
@@ -406,14 +494,14 @@ router.post('/:id/submit', auth, async (req, res) => {
             description: `Quiz completed with ${percentage}% score`
           }
         });
-        
+
         // Update user XP
         const updatedUser = await User.findByIdAndUpdate(
           req.user._id,
           { $inc: { xp: xpAmount, total_xp: xpAmount } },
           { new: true }
         );
-        
+
         console.log('[submitQuiz] XP awarded via fallback. User XP now:', updatedUser.xp, 'XP Log ID:', xpLog._id);
       }
     } catch (xpError) {
@@ -499,26 +587,61 @@ router.get('/user/history', auth, async (req, res) => {
 // Get quiz leaderboard
 router.get('/:id/leaderboard', auth, async (req, res) => {
   try {
-    const results = await QuizResult.find({ quizId: req.params.id })
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const query = { quizId: req.params.id };
+
+    // Get total count for pagination
+    const total = await QuizResult.countDocuments(query);
+
+    const results = await QuizResult.find(query)
       .populate('userId', 'name username')
       .sort({ percentage: -1, timeSpent: 1 }) // Sort by score desc, then time asc
-      .limit(50)
+      .skip(skip)
+      .limit(limit)
       .lean();
 
-    const leaderboard = results.map((result, index) => ({
-      rank: index + 1,
-      user: {
-        id: result.userId._id,
-        name: result.userId.name,
-        username: result.userId.username,
-      },
-      score: result.score,
-      percentage: result.percentage,
-      timeSpent: result.timeSpent,
-      completedAt: result.completedAt,
-    }));
+    // Adjust rank based on pagination
+    const leaderboard = results.map((result, index) => {
+      let userDetails = {
+        name: 'Anonymous',
+        username: 'anonymous'
+      };
 
-    res.json({ leaderboard });
+      if (result.userId) {
+        userDetails = {
+          id: result.userId._id,
+          name: result.userId.name,
+          username: result.userId.username,
+        };
+      } else if (result.guestName) {
+        userDetails = {
+          name: result.guestName,
+          username: 'Guest'
+        };
+      }
+
+      return {
+        rank: skip + index + 1,
+        user: userDetails,
+        score: result.score,
+        percentage: result.percentage,
+        timeSpent: result.timeSpent,
+        completedAt: result.completedAt,
+      };
+    });
+
+    res.json({
+      leaderboard,
+      pagination: {
+        current: page,
+        pages: Math.ceil(total / limit),
+        total,
+        perPage: limit
+      }
+    });
   } catch (error) {
     console.error('Get leaderboard error:', error);
     res.status(500).json({ error: 'Failed to fetch leaderboard' });
