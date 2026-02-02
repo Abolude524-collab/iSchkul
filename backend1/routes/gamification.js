@@ -40,7 +40,7 @@ function isYesterday(date, now = new Date()) {
   const d = startOfDay(now);
   d.setDate(d.getDate() - 1);
   const yesterdayStart = d.getTime();
-
+  
   const lastStart = startOfDay(date).getTime();
   return lastStart === yesterdayStart;
 }
@@ -254,30 +254,20 @@ async function performAward(user_id, activity_type, requestXp = null, metadata =
 // Get leaderboard
 router.get('/leaderboard', auth, async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const skip = (page - 1) * limit;
-
-    const query = {
+    // Exclude admins and superadmins from leaderboard
+    const users = await User.find({ 
       is_leaderboard_visible: true,
       isAdmin: { $ne: true },
       role: { $nin: ['admin', 'superadmin'] }
-    };
-
-    // Get total count
-    const total = await User.countDocuments(query);
-
-    // Exclude admins and superadmins from leaderboard
-    const users = await User.find(query)
+    })
       .select('_id name username institution total_xp level avatar current_streak badges')
       .sort({ total_xp: -1 })
-      .skip(skip)
-      .limit(limit);
+      .limit(50);
 
     const leaderboard = users.map((user, index) => ({
       id: user._id.toString(),
       _id: user._id.toString(),
-      rank: skip + index + 1,
+      rank: index + 1,
       name: user.name,
       username: user.username,
       institution: user.institution || '',
@@ -288,15 +278,7 @@ router.get('/leaderboard', auth, async (req, res) => {
       badges: user.badges
     }));
 
-    res.json({
-      leaderboard,
-      pagination: {
-        current: page,
-        pages: Math.ceil(total / limit),
-        total,
-        perPage: limit
-      }
-    });
+    res.json({ leaderboard });
   } catch (error) {
     console.error('Leaderboard error:', error);
     res.status(500).json({ error: 'Server error' });
@@ -318,22 +300,22 @@ router.get('/history', auth, async (req, res) => {
 
     // Get single source of truth - recalculate from logs if mismatch detected
     const user = await User.findById(userId).select('xp total_xp level current_streak');
-
+    
     // Calculate total from logs to verify
     const totalFromLogs = await XpLog.aggregate([
       { $match: { user_id: new mongoose.Types.ObjectId(userId) } },
       { $group: { _id: null, total: { $sum: '$xp_earned' } } }
     ]);
-
+    
     const calculatedXp = totalFromLogs[0]?.total || 0;
     const dbXp = user.total_xp || user.xp || 0;
-
+    
     // If mismatch > 30, flag it for repair
     if (Math.abs(calculatedXp - dbXp) > 30) {
       console.warn(`[XP SYNC ALERT] User ${userId}: DB=${dbXp}, Calculated=${calculatedXp}`);
       // Use calculated value as single source of truth
-      await User.findByIdAndUpdate(userId, {
-        $set: { xp: calculatedXp, total_xp: calculatedXp }
+      await User.findByIdAndUpdate(userId, { 
+        $set: { xp: calculatedXp, total_xp: calculatedXp } 
       });
     }
 
@@ -375,8 +357,8 @@ router.get('/activity', auth, async (req, res) => {
     todayEnd.setDate(todayEnd.getDate() + 1);
 
     const todayStats = await XpLog.aggregate([
-      {
-        $match: {
+      { 
+        $match: { 
           user_id: new mongoose.Types.ObjectId(userId),
           timestamp: { $gte: todayStart, $lt: todayEnd }
         }
@@ -437,7 +419,7 @@ router.post('/enter', auth, async (req, res) => {
     const userId = req.user._id;
 
     // Award daily login XP if not already awarded today
-    await performAward(userId, 'daily_login', null, {
+    await performAward(userId, 'daily_login', null, { 
       description: 'Welcome back! Your daily learning session has started.',
       client: 'web-app'
     });
@@ -510,7 +492,7 @@ router.get('/profile-stats', auth, async (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     const unifiedXp = Math.max(user.xp || 0, user.total_xp || 0);
-
+    
     // Check if streak is active (last activity was yesterday or today)
     const now = new Date();
     const lastActive = user.last_active_date ? new Date(user.last_active_date) : null;
@@ -606,7 +588,7 @@ function getActivityDescription(activityType) {
   return descriptions[activityType] || 'Activity completed';
 }
 
-module.exports = function (app) {
+module.exports = function(app) {
   // Set the awardXp function for other routes to use
   app.locals.awardXp = performAward;
   return router;

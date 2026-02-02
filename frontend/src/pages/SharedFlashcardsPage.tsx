@@ -124,6 +124,32 @@ export const SharedFlashcardsPage: React.FC = () => {
 
   const currentCard = flashcardSet.flashcards[currentCardIndex];
 
+  if (flashcardSet.flashcards.length === 0) {
+    return (
+      <div className="min-h-screen flex flex-col bg-gray-50">
+        <div className="bg-white border-b border-gray-200 px-4 py-4">
+          <div className="max-w-4xl mx-auto">
+            <h1 className="text-2xl font-bold text-gray-900">{flashcardSet.title}</h1>
+          </div>
+        </div>
+        <div className="flex-grow flex items-center justify-center">
+          <div className="text-center p-8">
+            <h2 className="text-xl font-semibold text-gray-700 mb-2">No flashcards yet</h2>
+            <p className="text-gray-500">This set is currently empty.</p>
+            <button
+              onClick={() => navigate('/')}
+              className="mt-6 text-blue-600 hover:text-blue-800 font-medium"
+            >
+              Go Back Home
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentCard) return null;
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       {/* Header */}
@@ -173,9 +199,8 @@ export const SharedFlashcardsPage: React.FC = () => {
               onClick={handleCardFlip}
             >
               <div
-                className={`relative w-full h-full transition-transform duration-500 transform-style-preserve-3d ${
-                  isFlipped ? 'rotate-y-180' : ''
-                }`}
+                className={`relative w-full h-full transition-transform duration-500 transform-style-preserve-3d ${isFlipped ? 'rotate-y-180' : ''
+                  }`}
               >
                 {/* Front of card */}
                 <div className="absolute inset-0 w-full h-full backface-hidden">
